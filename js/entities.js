@@ -6,7 +6,6 @@ export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw:
 export const mobs = [];
 export let closestMobDist = 999;
 
-// ИСПРАВЛЕНО: Процедурная генерация воксельных текстур с шумом!
 function getTex(hexColor, noiseLevel = 0.12) {
   const size = 16;
   const canvas = document.createElement('canvas');
@@ -19,7 +18,6 @@ function getTex(hexColor, noiseLevel = 0.12) {
   
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
-      // Генерируем пиксельный разброс яркости
       const n = (Math.random() - 0.5) * noiseLevel;
       const c = new THREE.Color().setHSL(hsl.h, hsl.s, Math.max(0, Math.min(1, hsl.l + n)));
       ctx.fillStyle = '#' + c.getHexString();
@@ -28,16 +26,17 @@ function getTex(hexColor, noiseLevel = 0.12) {
   }
   
   const tex = new THREE.CanvasTexture(canvas);
-  // Магические фильтры для пиксель-арта без размытия:
   tex.magFilter = THREE.NearestFilter; 
   tex.minFilter = THREE.NearestFilter;
   return new THREE.MeshLambertMaterial({ map: tex });
 }
 
-export function col(pos) {
-  for (let x = Math.floor(pos.x - P.r); x <= Math.floor(pos.x + P.r); x++)
-    for (let y = Math.floor(pos.y); y <= Math.floor(pos.y + P.h); y++)
-      for (let z = Math.floor(pos.z - P.r); z <= Math.floor(pos.z + P.r); z++)
+// ИСПРАВЛЕНИЕ ФИЗИКИ: Универсальная функция коллизии для любых объектов
+export function col(pos, r = P.r, h = P.h) {
+  const eps = 0.001; // Защита от застревания в стыках блоков
+  for (let x = Math.floor(pos.x - r + eps); x <= Math.floor(pos.x + r - eps); x++)
+    for (let y = Math.floor(pos.y); y <= Math.floor(pos.y + h - eps); y++)
+      for (let z = Math.floor(pos.z - r + eps); z <= Math.floor(pos.z + r - eps); z++)
         if (gbw(x, y, z) > 0) return true;
   return false;
 }
@@ -77,13 +76,12 @@ export function raycast(camera) {
 
 function b(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
-// Применяем текстурные материалы!
 const M_FLESH = getTex(0xdfa890);
 const M_SHIRT = getTex(0x4a5b2c);
 const M_FUR = getTex(0xeeeeee);
 const M_EARS = getTex(0xffb6c1);
 const M_FACE = getTex(0xf5c3a9);
-const M_EYE = new THREE.MeshLambertMaterial({color: 0xffffff}); // Глаза оставим чистыми белыми
+const M_EYE = new THREE.MeshLambertMaterial({color: 0xffffff});
 const M_PUPIL = new THREE.MeshLambertMaterial({color: 0x000000});
 
 export function makeTroll() {
@@ -91,13 +89,11 @@ export function makeTroll() {
   const body = b(1.4, 1.2, 1.4, M_SHIRT); body.position.y = 0.6; g.add(body);
   const head = b(0.8, 0.8, 0.8, M_FLESH); head.position.set(0, 1.6, 0.2); g.add(head);
 
-  // Выпученные глаза
   const le = b(0.3, 0.3, 0.3, M_EYE); le.position.set(-0.25, 1.8, 0.6);
   const lp = b(0.1, 0.1, 0.1, M_PUPIL); lp.position.set(-0.25, 1.8, 0.76);
   const re = b(0.3, 0.3, 0.3, M_EYE); re.position.set(0.25, 1.8, 0.6);
   const rp = b(0.1, 0.1, 0.1, M_PUPIL); rp.position.set(0.25, 1.8, 0.76);
   
-  // Добавим волосы троллю (для реалистичности по фото)
   const hair = b(1.0, 0.3, 0.9, getTex(0x221100)); hair.position.set(0, 2.05, 0.1);
 
   g.add(le, lp, re, rp, hair);
@@ -110,7 +106,6 @@ export function makeRabbitMan() {
   const body = b(1.8, 1.6, 1.8, M_FUR); body.position.y = 0.8; g.add(body);
   const face = b(0.7, 0.5, 0.1, M_FACE); face.position.set(0, 1.2, 0.95); g.add(face);
   
-  // Уши кролика
   const le = b(0.2, 0.8, 0.1, M_FUR); le.position.set(-0.3, 2.0, 0.8);
   const leIn = b(0.1, 0.6, 0.11, M_EARS); leIn.position.set(-0.3, 2.0, 0.81);
   const re = b(0.2, 0.8, 0.1, M_FUR); re.position.set(0.3, 2.0, 0.8);
@@ -129,9 +124,10 @@ export function spawnMobs(scene) {
 
   for (const d of defs) {
     const mob = d.mk();
-    mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type});
+    mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type, onG: false});
     genChunk(Math.floor(d.x / CHUNK), Math.floor(d.z / CHUNK));
-    mob.position.set(d.x, groundY(d.x, d.z) + 5, d.z);
+    // Спавним мобов в воздухе, чтобы они упали на землю по правильной физике
+    mob.position.set(d.x, groundY(d.x, d.z) + 3, d.z);
     scene.add(mob); mobs.push(mob);
   }
 }
@@ -154,8 +150,8 @@ export function resetGame() {
 
   try {
     if (mobs.length >= 2) {
-      mobs[0].position.set(15, groundY(15, 10) + 5, 10);
-      mobs[1].position.set(-15, groundY(-15, -15) + 5, -15);
+      mobs[0].position.set(player.pos.x + 15, groundY(player.pos.x + 15, player.pos.z + 10) + 5, player.pos.z + 10);
+      mobs[1].position.set(player.pos.x - 15, groundY(player.pos.x - 15, player.pos.z - 15) + 5, player.pos.z - 15);
     }
   } catch (e) { console.error("Mob reset:", e); }
 }
@@ -193,14 +189,41 @@ export function updateMobs(dt) {
   for (const m of mobs) {
     const d = m.userData;
     
+    // Гравитация
     d.vy -= P.grav * dt; 
-    m.position.y += d.vy * dt;
-    
-    const gy = groundY(m.position.x, m.position.z);
-    if (m.position.y < gy) {
-      m.position.y = gy;
-      d.vy = 0;
-    }
+    d.onG = false;
+
+    // Внутренняя функция для просчета коллизий моба по оси (слайдинг и авто-шаг)
+    const moveMobAxis = (axis, amt) => {
+      if (!amt) return;
+      const s = Math.sign(amt); let rem = amt;
+      while (Math.abs(rem) > 1e-4) {
+        const step = Math.min(Math.abs(rem), 0.05) * s;
+        const t = m.position.clone(); t[axis] += step;
+
+        if (!col(t, d.r, d.h)) {
+            m.position.copy(t); rem -= step; continue;
+        }
+        
+        // Автоматический шаг (чтобы забираться на горы в 1 блок)
+        if (axis !== 'y' && d.onG) {
+          const ts = t.clone(); ts.y += 1.02;
+          if (!col(ts, d.r, d.h)) {
+              m.position.copy(ts); rem -= step; continue;
+          }
+        }
+        
+        // Стена/Земля
+        if (axis === 'y') {
+            if (s < 0) d.onG = true; // Коснулись земли
+            d.vy = 0;
+        }
+        break;
+      }
+    };
+
+    // 1. Применяем падение
+    moveMobAxis('y', d.vy * dt);
 
     if (!player.dead) {
       const dx = cx - m.position.x;
@@ -209,8 +232,9 @@ export function updateMobs(dt) {
       closestMobDist = Math.min(closestMobDist, dist);
       
       if (dist > 1.0 && dist < 40) {
-        m.position.x += (dx / dist) * d.spd * dt;
-        m.position.z += (dz / dist) * d.spd * dt;
+        // 2. Движение к игроку по X и Z (теперь с физикой блоков!)
+        moveMobAxis('x', (dx / dist) * d.spd * dt);
+        moveMobAxis('z', (dz / dist) * d.spd * dt);
         m.rotation.y = Math.atan2(dx, dz);
       }
 
