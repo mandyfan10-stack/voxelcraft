@@ -19,24 +19,14 @@ const keys = { w: 0, a: 0, s: 0, d: 0, j: 0 };
 let selIdx = 0;
 let locked = false;
 
-// ИСПРАВЛЕНО: Чтение e.code (физическая клавиша) игнорирует русскую/английскую раскладку
 addEventListener('keydown', e => {
   const c = e.code;
-  if (c === 'KeyW') keys.w = 1; 
-  else if (c === 'KeyA') keys.a = 1; 
-  else if (c === 'KeyS') keys.s = 1; 
-  else if (c === 'KeyD') keys.d = 1; 
-  else if (c === 'Space') keys.j = 1;
+  if (c === 'KeyW') keys.w = 1; else if (c === 'KeyA') keys.a = 1; else if (c === 'KeyS') keys.s = 1; else if (c === 'KeyD') keys.d = 1; else if (c === 'Space') keys.j = 1;
   else if (e.key >= '1' && e.key <= '6') selIdx = +e.key - 1;
 });
-
 addEventListener('keyup', e => {
   const c = e.code;
-  if (c === 'KeyW') keys.w = 0; 
-  else if (c === 'KeyA') keys.a = 0; 
-  else if (c === 'KeyS') keys.s = 0; 
-  else if (c === 'KeyD') keys.d = 0; 
-  else if (c === 'Space') keys.j = 0;
+  if (c === 'KeyW') keys.w = 0; else if (c === 'KeyA') keys.a = 0; else if (c === 'KeyS') keys.s = 0; else if (c === 'KeyD') keys.d = 0; else if (c === 'Space') keys.j = 0;
 });
 
 const cvs = document.getElementById('c');
@@ -45,6 +35,9 @@ document.addEventListener('pointerlockchange', () => locked = document.pointerLo
 
 document.addEventListener('mousemove', e => { 
   if (locked && !player.dead) { 
+    // ИСПРАВЛЕНИЕ КАМЕРЫ: Игнорируем глитчевые скачки Pointer Lock (больше 100px за один тик)
+    if (Math.abs(e.movementX) > 100 || Math.abs(e.movementY) > 100) return;
+    
     player.yaw -= e.movementX * .0022; 
     player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch - e.movementY * .0021)); 
   } 
