@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK, P } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, ckey, genChunk, makeChunkMesh, sbw } from './world.js';
-import { player, raycast, col, spawnMobs, updateMobs, closestMobDist, groundY, isDead } from './entities.js';
+import { player, raycast, col, spawnMobs, updateMobs, groundY } from './entities.js';
 
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.4));
@@ -30,18 +30,18 @@ addEventListener('keyup', e => {
 });
 
 const cvs = document.getElementById('c');
-cvs.addEventListener('click', () => { if (!isDead) cvs.requestPointerLock(); });
+cvs.addEventListener('click', () => { if (!player.dead) cvs.requestPointerLock(); });
 document.addEventListener('pointerlockchange', () => locked = document.pointerLockElement === cvs);
 
 document.addEventListener('mousemove', e => { 
-  if (locked && !isDead) { 
+  if (locked && !player.dead) { 
     player.yaw -= e.movementX * .0022; 
     player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch - e.movementY * .0021)); 
   } 
 });
 
 cvs.addEventListener('mousedown', e => {
-  if (!locked || isDead) return;
+  if (!locked || player.dead) return;
   if (e.button === 0) { const r = raycast(camera); if (r) sbw(...r.hit, 0); }
   if (e.button === 2) { const r = raycast(camera); if (r && r.prev) sbw(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
 });
@@ -87,8 +87,8 @@ const clock = new THREE.Clock();
 function update(dt) {
   let wish = new THREE.Vector3();
 
-  // Если игрок жив - обрабатываем управление
-  if (!isDead) {
+  // Игрок двигается только если жив
+  if (!player.dead) {
     let ix = keys.d - keys.a, iz = keys.w - keys.s;
     const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
     const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
@@ -102,22 +102,23 @@ function update(dt) {
   player.vel.x += (wish.x - player.vel.x) * Math.min(1, ac * dt);
   player.vel.z += (wish.z - player.vel.z) * Math.min(1, ac * dt);
   
-  // Гравитация работает всегда
+  // Гравитация тянет вниз всегда
   player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
   
   mvAxis('x', player.vel.x * dt); mvAxis('z', player.vel.z * dt); mvY(player.vel.y * dt);
   
-  // Защита от падения в бездну
-  if (player.pos.y < -6) { player.pos.set(0, groundY(0,0) + 2, 0); }
+  // Защита от бездны
+  if (player.pos.y < -10) { player.pos.set(0, groundY(0,0) + 15, 0); }
   
-  // Камера следит за игроком всегда
   camera.position.set(player.pos.x, player.pos.y + P.eye, player.pos.z);
   camera.rotation.order = 'YXZ'; camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
   
   updateMobs(dt);
   
   lastCU += dt; if (lastCU > .15) { updateChunks(); lastCU = 0; }
-  document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} Dead:${isDead}`;
+  
+  // Для проверки: на HUD будет написано Dead: true/false
+  document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} | Dead: ${player.dead}`;
 }
 
 function loop() {
@@ -128,7 +129,7 @@ function loop() {
 
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-player.pos.set(0, groundY(0,0) + 2, 0);
+player.pos.set(0, groundY(0,0) + 10, 0);
 updateChunks();
 setTimeout(() => spawnMobs(scene), 60);
 loop();
