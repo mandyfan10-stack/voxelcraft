@@ -1,0 +1,30 @@
+* { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+#c { display:block; width:100%; height:100%; }
+
+/* Crosshair */
+#ch { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:20px; height:20px; pointer-events:none; z-index:9; }
+#ch:before, #ch:after { content:""; position:absolute; background:rgba(255,255,255,.9); }
+#ch:before { left:9px; top:0; width:2px; height:20px; }
+#ch:after { left:0; top:9px; width:20px; height:2px; }
+
+/* UI */
+#hud { position:fixed; top:10px; left:10px; z-index:9; color:#fff; background:rgba(0,0,0,.45); padding:6px 10px; border-radius:8px; font:13px monospace; }
+#bar { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); display:flex; gap:6px; padding:7px; border-radius:12px; background:rgba(0,0,0,.35); z-index:9; }
+.sl { width:50px; height:50px; border:3px solid rgba(255,255,255,.3); border-radius:8px; overflow:hidden; position:relative; cursor:pointer; background:#111; }
+.sl.on { border-color:#fff; box-shadow:0 0 8px #fff8; }
+.sl canvas { width:100%; height:100%; image-rendering:pixelated; display:block; }
+.sl span { position:absolute; right:3px; bottom:1px; color:#fff; font:bold 11px monospace; text-shadow:0 1px 2px #000; }
+
+/* Mobile controls */
+#jb { position:fixed; left:20px; bottom:100px; width:130px; height:130px; border-radius:50%; display:none; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.1); z-index:9; touch-action:none; }
+#jk { position:absolute; left:50%; top:50%; width:54px; height:54px; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.22); }
+#jp { position:fixed; right:18px; bottom:100px; width:72px; height:72px; border-radius:50%; display:none; align-items:center; justify-content:center; background:rgba(255,255,255,.13); border:2px solid rgba(255,255,255,.28); color:#fff; font-weight:900; font-size:13px; z-index:9; }
+@media(pointer:coarse) { #jb, #jp { display:flex; } }
+
+/* Scream & Effects */
+#scr { position:fixed; inset:0; z-index:9999; display:none; overflow:hidden; }
+#scri { width:100%; height:100%; object-fit:cover; }
+#skull { position:fixed; inset:0; z-index:997; display:none; align-items:center; justify-content:center; pointer-events:none; }
+#skullemoji { font-size:0px; transition:font-size 0.3s cubic-bezier(.2,1.8,.4,1); filter:drop-shadow(0 0 30px red); }
+@keyframes skullpulse { 0%, 100% { transform:scale(1) rotate(-8deg); } 50% { transform:scale(1.12) rotate(8deg); } }
