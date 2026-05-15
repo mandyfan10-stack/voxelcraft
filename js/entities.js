@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { P, REACH, CHUNK, CH } from './config.js';
 import { gbw, genChunk } from './world.js';
 
-export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -.1, onG: false };
+// ДОБАВЛЕНО: Флаг dead прямо в объекте игрока!
+export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -.1, onG: false, dead: false };
 export const mobs = [];
 export let closestMobDist = 999;
-export let isDead = false;
 
 export function col(pos) {
   for (let x = Math.floor(pos.x - P.r); x <= Math.floor(pos.x + P.r); x++)
@@ -101,42 +101,58 @@ export function spawnMobs(scene) {
   }
 }
 
-// Система перезапуска
+// Надежный сброс игры
 export function resetGame() {
-  isDead = false;
-  player.pos.set(0, groundY(0,0) + 2, 0);
+  player.dead = false;
+  
+  // Кидаем игрока с высоты, чтобы он плавно упал и не застрял
+  player.pos.set(0, groundY(0,0) + 15, 0);
   player.vel.set(0, 0, 0);
   player.yaw = 0;
   player.pitch = -.1;
   
-  document.getElementById('skull').style.display = 'none';
-  document.getElementById('skullemoji').style.fontSize = '0px';
-  document.getElementById('skullemoji').style.animation = 'none';
-
-  // Откидываем мобов обратно
-  if (mobs.length >= 2) {
-    mobs[0].position.set(player.pos.x + 15, groundY(player.pos.x + 15, player.pos.z + 10) + 5, player.pos.z + 10);
-    mobs[1].position.set(player.pos.x - 15, groundY(player.pos.x - 15, player.pos.z - 15) + 5, player.pos.z - 15);
+  const skull = document.getElementById('skull');
+  const emoji = document.getElementById('skullemoji');
+  
+  if (skull) skull.style.display = 'none';
+  if (emoji) {
+    emoji.style.fontSize = '0px';
+    emoji.style.animation = 'none';
   }
+
+  // Безопасный отброс мобов
+  try {
+    if (mobs.length >= 2) {
+      mobs[0].position.set(15, groundY(15, 10) + 5, 10);
+      mobs[1].position.set(-15, groundY(-15, -15) + 5, -15);
+    }
+  } catch (e) { console.error("Mob reset:", e); }
 }
 
 function triggerDeath() {
-  if (isDead) return;
-  isDead = true;
-  document.exitPointerLock(); 
+  if (player.dead) return;
+  player.dead = true;
+  
+  if (document.pointerLockElement) {
+    document.exitPointerLock(); 
+  }
   
   const skull = document.getElementById('skull');
   const emoji = document.getElementById('skullemoji');
   
-  skull.style.display = 'flex';
-  skull.style.background = 'rgba(0,0,0,0.8)';
+  if (skull) {
+    skull.style.display = 'flex';
+    skull.style.background = 'rgba(0,0,0,0.8)';
+  }
   
-  requestAnimationFrame(() => {
-    emoji.style.fontSize = '300px';
-    emoji.style.animation = 'skullpulse 0.5s infinite';
-  });
+  if (emoji) {
+    requestAnimationFrame(() => {
+      emoji.style.fontSize = '300px';
+      emoji.style.animation = 'skullpulse 0.5s infinite';
+    });
+  }
 
-  // Авто-воскрешение через 3.5 секунды
+  // 100% вызовет респавн через 3.5 секунды
   setTimeout(resetGame, 3500);
 }
 
@@ -147,7 +163,6 @@ export function updateMobs(dt) {
   for (const m of mobs) {
     const d = m.userData;
     
-    // Гравитация мобов работает всегда
     d.vy -= P.grav * dt; 
     m.position.y += d.vy * dt;
     
@@ -157,8 +172,8 @@ export function updateMobs(dt) {
       d.vy = 0;
     }
 
-    // Мобы двигаются к игроку только если он жив
-    if (!isDead) {
+    // Мобы атакуют только живого игрока
+    if (!player.dead) {
       const dx = cx - m.position.x;
       const dz = cz - m.position.z;
       const dist = Math.hypot(dx, dz) || 1;
