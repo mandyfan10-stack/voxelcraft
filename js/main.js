@@ -35,9 +35,7 @@ document.addEventListener('pointerlockchange', () => locked = document.pointerLo
 
 document.addEventListener('mousemove', e => { 
   if (locked && !player.dead) { 
-    // ИСПРАВЛЕНИЕ КАМЕРЫ: Игнорируем глитчевые скачки Pointer Lock (больше 100px за один тик)
     if (Math.abs(e.movementX) > 100 || Math.abs(e.movementY) > 100) return;
-    
     player.yaw -= e.movementX * .0022; 
     player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch - e.movementY * .0021)); 
   } 
@@ -49,53 +47,109 @@ cvs.addEventListener('mousedown', e => {
   if (e.button === 2) { const r = raycast(camera); if (r && r.prev) sbw(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
 });
 
+// Глобальные переменные для пулинга (защита от мусора GC)
+const tPos = new THREE.Vector3();
+const tStep = new THREE.Vector3();
+const wish = new THREE.Vector3();
+const fw = new THREE.Vector3();
+const rt = new THREE.Vector3();
+
 function mvAxis(a, amt) {
   if (!amt) return;
   const s = Math.sign(amt); let rem = amt;
   while (Math.abs(rem) > 1e-4) {
-    const d = Math.min(Math.abs(rem), .05) * s; const t = player.pos.clone(); t[a] += d;
-    if (!col(t)) { player.pos.copy(t); rem -= d; continue; }
-    if (a !== 'y' && player.onG) { const ts = t.clone(); ts.y += 1.02; if (!col(ts)) { player.pos.copy(ts); rem -= d; continue; } }
+    const d = Math.min(Math.abs(rem), .05) * s; 
+    tPos.copy(player.pos); tPos[a] += d;
+    if (!col(tPos)) { player.pos.copy(tPos); rem -= d; continue; }
+    
+    if (a !== 'y' && player.onG) { 
+      tStep.copy(tPos); tStep.y += 1.02; 
+      if (!col(tStep)) { player.pos.copy(tStep); rem -= d; continue; } 
+    }
     player.vel[a] = 0; break;
   }
 }
+
 function mvY(amt) {
   if (!amt) return;
   const s = Math.sign(amt); let rem = amt; player.onG = false;
   while (Math.abs(rem) > 1e-4) {
-    const d = Math.min(Math.abs(rem), .05) * s; const t = player.pos.clone(); t.y += d;
-    if (!col(t)) { player.pos.copy(t); rem -= d; continue; } if (s < 0) player.onG = true; player.vel.y = 0; break;
+    const d = Math.min(Math.abs(rem), .05) * s; 
+    tPos.copy(player.pos); tPos.y += d;
+    if (!col(tPos)) { player.pos.copy(tPos); rem -= d; continue; } 
+    if (s < 0) player.onG = true; 
+    player.vel.y = 0; break;
   }
 }
 
 const RDIST = 4;
 let lastCU = 0;
+const chunkQueue = [];
+
 function updateChunks() {
   const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
-  for (let dx = -RDIST; dx <= RDIST; dx++) for (let dz = -RDIST; dz <= RDIST; dz++) {
-    const cx = pcx + dx, cz = pcz + dz; genChunk(cx, cz);
-    if (!chunkMeshes.has(ckey(cx, cz))) makeChunkMesh(cx, cz, scene);
+  
+  for (let dx = -RDIST; dx <= RDIST; dx++) {
+    for (let dz = -RDIST; dz <= RDIST; dz++) {
+      const cx = pcx + dx, cz = pcz + dz;
+      const key = ckey(cx, cz);
+      if (!worldData.has(key) || !chunkMeshes.has(key)) {
+        if (!chunkQueue.find(c => c.cx === cx && c.cz === cz)) {
+          chunkQueue.push({cx, cz});
+        }
+      }
+    }
   }
+
+  // Сортировка очереди: ближние чанки генерируются первыми
+  chunkQueue.sort((a, b) => {
+    return (Math.pow(a.cx - pcx, 2) + Math.pow(a.cz - pcz, 2)) - 
+           (Math.pow(b.cx - pcx, 2) + Math.pow(b.cz - pcz, 2));
+  });
+
+  // УСТРАНЕНИЕ УТЕЧКИ ПАМЯТИ: Полное удаление старых данных и мешей
   for (const k of chunkMeshes.keys()) {
     const cx = (k >> 16), cz = (k << 16) >> 16;
     if (Math.abs(cx - pcx) > RDIST + 1 || Math.abs(cz - pcz) > RDIST + 1) {
-      const m = chunkMeshes.get(k); scene.remove(m); m.geometry.dispose(); m.material.dispose(); chunkMeshes.delete(k);
+      const m = chunkMeshes.get(k); 
+      scene.remove(m); 
+      m.geometry.dispose(); 
+      m.material.dispose(); 
+      chunkMeshes.delete(k);
+      worldData.delete(k); 
     }
   }
-  for (const k of dirtyChunks) { const cx = (k >> 16), cz = (k << 16) >> 16; makeChunkMesh(cx, cz, scene); }
+  
+  for (const k of dirtyChunks) { 
+    const cx = (k >> 16), cz = (k << 16) >> 16; 
+    makeChunkMesh(cx, cz, scene); 
+  }
   dirtyChunks.clear();
 }
 
-const clock = new THREE.Clock();
+function processChunkQueue() {
+  // Амортизация: обрабатываем только 1 чанк за кадр (Time Slicing)
+  if (chunkQueue.length > 0) {
+    const {cx, cz} = chunkQueue.shift();
+    genChunk(cx, cz);
+    if (!chunkMeshes.has(ckey(cx, cz))) makeChunkMesh(cx, cz, scene);
+  }
+}
+
 function update(dt) {
-  let wish = new THREE.Vector3();
+  wish.set(0, 0, 0);
 
   if (!player.dead) {
     let ix = keys.d - keys.a, iz = keys.w - keys.s;
-    const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
-    const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-    const rt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-    wish = fw.clone().multiplyScalar(iz).add(rt.clone().multiplyScalar(ix));
+    const len = Math.hypot(ix, iz); 
+    if (len > 1) { ix /= len; iz /= len; }
+    
+    fw.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    rt.set(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    
+    wish.copy(fw).multiplyScalar(iz);
+    wish.addScaledVector(rt, ix);
+
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(P.spd * Math.min(len, 1));
     if (player.onG && keys.j) { player.vel.y = P.jmp; player.onG = false; }
   }
@@ -106,7 +160,9 @@ function update(dt) {
   
   player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
   
-  mvAxis('x', player.vel.x * dt); mvAxis('z', player.vel.z * dt); mvY(player.vel.y * dt);
+  mvAxis('x', player.vel.x * dt); 
+  mvAxis('z', player.vel.z * dt); 
+  mvY(player.vel.y * dt);
   
   if (player.pos.y < -10) { player.pos.set(0, groundY(0,0) + 15, 0); }
   
@@ -115,14 +171,33 @@ function update(dt) {
   
   updateMobs(dt);
   
-  lastCU += dt; if (lastCU > .15) { updateChunks(); lastCU = 0; }
+  lastCU += dt; 
+  if (lastCU > .2) { 
+    updateChunks(); 
+    lastCU = 0; 
+  }
   
   document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} | Dead: ${player.dead}`;
 }
 
+const clock = new THREE.Clock();
+const FIXED_DT = 1 / 60;
+let accumulator = 0;
+
 function loop() {
   requestAnimationFrame(loop);
-  update(Math.min(.05, clock.getDelta()));
+  
+  // Защита от спирали смерти (когда вкладка браузера неактивна)
+  let frameTime = Math.min(0.25, clock.getDelta());
+  accumulator += frameTime;
+
+  // Физика на фиксированном шаге (исключает пролет сквозь стены при лагах)
+  while (accumulator >= FIXED_DT) {
+    update(FIXED_DT);
+    accumulator -= FIXED_DT;
+  }
+  
+  processChunkQueue();
   renderer.render(scene, camera);
 }
 
@@ -130,5 +205,8 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 
 player.pos.set(0, groundY(0,0) + 10, 0);
 updateChunks();
+// Синхронно генерируем первичные чанки под ногами, чтобы не провалиться
+while(chunkQueue.length > 0) processChunkQueue();
+
 setTimeout(() => spawnMobs(scene), 60);
 loop();
