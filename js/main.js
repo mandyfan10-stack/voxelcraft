@@ -3,7 +3,6 @@ import { CHUNK, P } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, ckey, genChunk, makeChunkMesh, sbw } from './world.js';
 import { player, raycast, col, spawnMobs, updateMobs, closestMobDist, groundY, isDead } from './entities.js';
 
-// Setup
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.4));
 renderer.setSize(innerWidth, innerHeight);
@@ -16,7 +15,6 @@ const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1
 scene.add(new THREE.HemisphereLight(0xbbd4ff, 0x88aa66, 1.0));
 const sun = new THREE.DirectionalLight(0xfff5dd, 0.85); sun.position.set(20, 40, 10); scene.add(sun);
 
-// Input Setup
 const keys = { w: 0, a: 0, s: 0, d: 0, j: 0 };
 let selIdx = 0;
 let locked = false;
@@ -32,10 +30,9 @@ addEventListener('keyup', e => {
 });
 
 const cvs = document.getElementById('c');
-cvs.addEventListener('click', () => cvs.requestPointerLock());
+cvs.addEventListener('click', () => { if (!isDead) cvs.requestPointerLock(); });
 document.addEventListener('pointerlockchange', () => locked = document.pointerLockElement === cvs);
 
-// ДОБАВЛЕНО: Блокировка движения мыши при смерти (!isDead)
 document.addEventListener('mousemove', e => { 
   if (locked && !isDead) { 
     player.yaw -= e.movementX * .0022; 
@@ -49,7 +46,6 @@ cvs.addEventListener('mousedown', e => {
   if (e.button === 2) { const r = raycast(camera); if (r && r.prev) sbw(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
 });
 
-// Movement logic helpers
 function mvAxis(a, amt) {
   if (!amt) return;
   const s = Math.sign(amt); let rem = amt;
@@ -69,7 +65,6 @@ function mvY(amt) {
   }
 }
 
-// Chunks update logic
 const RDIST = 4;
 let lastCU = 0;
 function updateChunks() {
@@ -88,35 +83,41 @@ function updateChunks() {
   dirtyChunks.clear();
 }
 
-// Game Loop
 const clock = new THREE.Clock();
 function update(dt) {
-  // ДОБАВЛЕНО: Стоп-кран для логики, если игрок мертв
-  if (isDead) return;
+  let wish = new THREE.Vector3();
 
-  let ix = keys.d - keys.a, iz = keys.w - keys.s;
-  const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
-  const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-  const rt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-  const wish = fw.clone().multiplyScalar(iz).add(rt.clone().multiplyScalar(ix));
-  if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(P.spd * Math.min(len, 1));
-  
+  // Если игрок жив - обрабатываем управление
+  if (!isDead) {
+    let ix = keys.d - keys.a, iz = keys.w - keys.s;
+    const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
+    const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const rt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    wish = fw.clone().multiplyScalar(iz).add(rt.clone().multiplyScalar(ix));
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(P.spd * Math.min(len, 1));
+    if (player.onG && keys.j) { player.vel.y = P.jmp; player.onG = false; }
+  }
+
   const ac = player.onG ? P.acc : P.aac;
   player.vel.x += (wish.x - player.vel.x) * Math.min(1, ac * dt);
   player.vel.z += (wish.z - player.vel.z) * Math.min(1, ac * dt);
-  if (player.onG && keys.j) { player.vel.y = P.jmp; player.onG = false; }
+  
+  // Гравитация работает всегда
   player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
   
   mvAxis('x', player.vel.x * dt); mvAxis('z', player.vel.z * dt); mvY(player.vel.y * dt);
+  
+  // Защита от падения в бездну
   if (player.pos.y < -6) { player.pos.set(0, groundY(0,0) + 2, 0); }
   
+  // Камера следит за игроком всегда
   camera.position.set(player.pos.x, player.pos.y + P.eye, player.pos.z);
   camera.rotation.order = 'YXZ'; camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
   
   updateMobs(dt);
   
   lastCU += dt; if (lastCU > .15) { updateChunks(); lastCU = 0; }
-  document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)}`;
+  document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} Dead:${isDead}`;
 }
 
 function loop() {
