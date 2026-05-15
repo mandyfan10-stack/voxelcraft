@@ -83,6 +83,7 @@ function updateChunks() {
 // Game Loop
 const clock = new THREE.Clock();
 function update(dt) {
+  if (isDead) return;
   let ix = keys.d - keys.a, iz = keys.w - keys.s;
   const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
   const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
