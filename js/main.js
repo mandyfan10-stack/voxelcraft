@@ -45,4 +45,89 @@ document.addEventListener('mousemove', e => {
 
 cvs.addEventListener('mousedown', e => {
   if (!locked || isDead) return;
-  if (e.button === 0)
+  if (e.button === 0) { const r = raycast(camera); if (r) sbw(...r.hit, 0); }
+  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) sbw(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
+});
+
+// Movement logic helpers
+function mvAxis(a, amt) {
+  if (!amt) return;
+  const s = Math.sign(amt); let rem = amt;
+  while (Math.abs(rem) > 1e-4) {
+    const d = Math.min(Math.abs(rem), .05) * s; const t = player.pos.clone(); t[a] += d;
+    if (!col(t)) { player.pos.copy(t); rem -= d; continue; }
+    if (a !== 'y' && player.onG) { const ts = t.clone(); ts.y += 1.02; if (!col(ts)) { player.pos.copy(ts); rem -= d; continue; } }
+    player.vel[a] = 0; break;
+  }
+}
+function mvY(amt) {
+  if (!amt) return;
+  const s = Math.sign(amt); let rem = amt; player.onG = false;
+  while (Math.abs(rem) > 1e-4) {
+    const d = Math.min(Math.abs(rem), .05) * s; const t = player.pos.clone(); t.y += d;
+    if (!col(t)) { player.pos.copy(t); rem -= d; continue; } if (s < 0) player.onG = true; player.vel.y = 0; break;
+  }
+}
+
+// Chunks update logic
+const RDIST = 4;
+let lastCU = 0;
+function updateChunks() {
+  const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
+  for (let dx = -RDIST; dx <= RDIST; dx++) for (let dz = -RDIST; dz <= RDIST; dz++) {
+    const cx = pcx + dx, cz = pcz + dz; genChunk(cx, cz);
+    if (!chunkMeshes.has(ckey(cx, cz))) makeChunkMesh(cx, cz, scene);
+  }
+  for (const k of chunkMeshes.keys()) {
+    const cx = (k >> 16), cz = (k << 16) >> 16;
+    if (Math.abs(cx - pcx) > RDIST + 1 || Math.abs(cz - pcz) > RDIST + 1) {
+      const m = chunkMeshes.get(k); scene.remove(m); m.geometry.dispose(); m.material.dispose(); chunkMeshes.delete(k);
+    }
+  }
+  for (const k of dirtyChunks) { const cx = (k >> 16), cz = (k << 16) >> 16; makeChunkMesh(cx, cz, scene); }
+  dirtyChunks.clear();
+}
+
+// Game Loop
+const clock = new THREE.Clock();
+function update(dt) {
+  // ДОБАВЛЕНО: Стоп-кран для логики, если игрок мертв
+  if (isDead) return;
+
+  let ix = keys.d - keys.a, iz = keys.w - keys.s;
+  const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
+  const fw = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+  const rt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+  const wish = fw.clone().multiplyScalar(iz).add(rt.clone().multiplyScalar(ix));
+  if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(P.spd * Math.min(len, 1));
+  
+  const ac = player.onG ? P.acc : P.aac;
+  player.vel.x += (wish.x - player.vel.x) * Math.min(1, ac * dt);
+  player.vel.z += (wish.z - player.vel.z) * Math.min(1, ac * dt);
+  if (player.onG && keys.j) { player.vel.y = P.jmp; player.onG = false; }
+  player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
+  
+  mvAxis('x', player.vel.x * dt); mvAxis('z', player.vel.z * dt); mvY(player.vel.y * dt);
+  if (player.pos.y < -6) { player.pos.set(0, groundY(0,0) + 2, 0); }
+  
+  camera.position.set(player.pos.x, player.pos.y + P.eye, player.pos.z);
+  camera.rotation.order = 'YXZ'; camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
+  
+  updateMobs(dt);
+  
+  lastCU += dt; if (lastCU > .15) { updateChunks(); lastCU = 0; }
+  document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)}`;
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  update(Math.min(.05, clock.getDelta()));
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+player.pos.set(0, groundY(0,0) + 2, 0);
+updateChunks();
+setTimeout(() => spawnMobs(scene), 60);
+loop();
