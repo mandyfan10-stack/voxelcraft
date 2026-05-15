@@ -19,14 +19,24 @@ const keys = { w: 0, a: 0, s: 0, d: 0, j: 0 };
 let selIdx = 0;
 let locked = false;
 
+// ИСПРАВЛЕНО: Чтение e.code (физическая клавиша) игнорирует русскую/английскую раскладку
 addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (k === 'w') keys.w = 1; else if (k === 'a') keys.a = 1; else if (k === 's') keys.s = 1; else if (k === 'd') keys.d = 1; else if (k === ' ') keys.j = 1;
-  else if (k >= '1' && k <= '6') selIdx = +k - 1;
+  const c = e.code;
+  if (c === 'KeyW') keys.w = 1; 
+  else if (c === 'KeyA') keys.a = 1; 
+  else if (c === 'KeyS') keys.s = 1; 
+  else if (c === 'KeyD') keys.d = 1; 
+  else if (c === 'Space') keys.j = 1;
+  else if (e.key >= '1' && e.key <= '6') selIdx = +e.key - 1;
 });
+
 addEventListener('keyup', e => {
-  const k = e.key.toLowerCase();
-  if (k === 'w') keys.w = 0; else if (k === 'a') keys.a = 0; else if (k === 's') keys.s = 0; else if (k === 'd') keys.d = 0; else if (k === ' ') keys.j = 0;
+  const c = e.code;
+  if (c === 'KeyW') keys.w = 0; 
+  else if (c === 'KeyA') keys.a = 0; 
+  else if (c === 'KeyS') keys.s = 0; 
+  else if (c === 'KeyD') keys.d = 0; 
+  else if (c === 'Space') keys.j = 0;
 });
 
 const cvs = document.getElementById('c');
@@ -87,7 +97,6 @@ const clock = new THREE.Clock();
 function update(dt) {
   let wish = new THREE.Vector3();
 
-  // Игрок двигается только если жив
   if (!player.dead) {
     let ix = keys.d - keys.a, iz = keys.w - keys.s;
     const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
@@ -102,12 +111,10 @@ function update(dt) {
   player.vel.x += (wish.x - player.vel.x) * Math.min(1, ac * dt);
   player.vel.z += (wish.z - player.vel.z) * Math.min(1, ac * dt);
   
-  // Гравитация тянет вниз всегда
   player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
   
   mvAxis('x', player.vel.x * dt); mvAxis('z', player.vel.z * dt); mvY(player.vel.y * dt);
   
-  // Защита от бездны
   if (player.pos.y < -10) { player.pos.set(0, groundY(0,0) + 15, 0); }
   
   camera.position.set(player.pos.x, player.pos.y + P.eye, player.pos.z);
@@ -117,7 +124,6 @@ function update(dt) {
   
   lastCU += dt; if (lastCU > .15) { updateChunks(); lastCU = 0; }
   
-  // Для проверки: на HUD будет написано Dead: true/false
   document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} | Dead: ${player.dead}`;
 }
 
