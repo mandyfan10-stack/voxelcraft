@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK, P } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, ckey, genChunk, makeChunkMesh, sbw } from './world.js';
-import { player, raycast, col, spawnMobs, updateMobs, closestMobDist, groundY } from './entities.js';
+import { player, raycast, col, spawnMobs, updateMobs, closestMobDist, groundY, isDead } from './entities.js';
 
 // Setup
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, powerPreference: 'high-performance' });
