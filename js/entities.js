@@ -5,6 +5,7 @@ import { gbw, genChunk } from './world.js';
 export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -.1, onG: false };
 export const mobs = [];
 export let closestMobDist = 999;
+export let isDead = false;
 
 export function col(pos) {
   for (let x = Math.floor(pos.x - P.r); x <= Math.floor(pos.x + P.r); x++)
@@ -21,7 +22,6 @@ export function groundY(x, z) {
   return y + .02;
 }
 
-// ОПТИМИЗАЦИЯ: DDA Algorithm (Fast Voxel Traversal) вместо пошагового сдвига
 export function raycast(camera) {
   const eye = new THREE.Vector3(player.pos.x, player.pos.y + P.eye, player.pos.z);
   const dir = new THREE.Vector3();
@@ -49,37 +49,134 @@ export function raycast(camera) {
   return null;
 }
 
-// --- Модельки и Мобы (Сокращенно для ясности) ---
-const MAT = { skin: new THREE.MeshLambertMaterial({color:0xc38060}) /* ... остальной твой MAT ... */ };
-function b(w,h,d,m){return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);}
+// Утилита для создания блоков
+function b(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
+// --- МОДЕЛЬ 1: Пузатый тролль с безумной улыбкой ---
 export function makeTroll() {
   const g = new THREE.Group();
-  g.add(b(.44,.9,.4, MAT.skin)); // Пример, тут твой полный код генерации тролля
-  g.userData = { h: 3.0 };
+  const fleshMat = new THREE.MeshLambertMaterial({color: 0xdfa890});
+  const shirtMat = new THREE.MeshLambertMaterial({color: 0x5a6b3c}); // Зеленая футболка
+  const eyeMat = new THREE.MeshLambertMaterial({color: 0xffffff});
+  const pupilMat = new THREE.MeshLambertMaterial({color: 0x000000});
+
+  // Огромное пузо
+  const body = b(1.4, 1.2, 1.4, shirtMat);
+  body.position.y = 0.6;
+  g.add(body);
+
+  // Голова
+  const head = b(0.8, 0.8, 0.8, fleshMat);
+  head.position.set(0, 1.6, 0.2);
+  g.add(head);
+
+  // Выпученные глаза
+  const le = b(0.3, 0.3, 0.3, eyeMat); le.position.set(-0.25, 1.8, 0.6);
+  const lp = b(0.1, 0.1, 0.1, pupilMat); lp.position.set(-0.25, 1.8, 0.76);
+  const re = b(0.3, 0.3, 0.3, eyeMat); re.position.set(0.25, 1.8, 0.6);
+  const rp = b(0.1, 0.1, 0.1, pupilMat); rp.position.set(0.25, 1.8, 0.76);
+  g.add(le, lp, re, rp);
+
+  g.userData = { h: 2.0, r: 0.7 };
+  return g;
+}
+
+// --- МОДЕЛЬ 2: Кролик с лицом мужика ---
+export function makeRabbitMan() {
+  const g = new THREE.Group();
+  const furMat = new THREE.MeshLambertMaterial({color: 0xeeeeee});
+  const faceMat = new THREE.MeshLambertMaterial({color: 0xf5c3a9});
+  const earMat = new THREE.MeshLambertMaterial({color: 0xffb6c1});
+
+  // Огромное круглое/кубическое тело
+  const body = b(1.8, 1.6, 1.8, furMat);
+  body.position.y = 0.8;
+  g.add(body);
+
+  // Плоское человеческое лицо спереди
+  const face = b(0.7, 0.5, 0.1, faceMat);
+  face.position.set(0, 1.2, 0.95);
+  g.add(face);
+
+  // Кроличьи уши
+  const le = b(0.15, 0.7, 0.1, earMat); le.position.set(-0.3, 2.0, 0.8);
+  const re = b(0.15, 0.7, 0.1, earMat); re.position.set(0.3, 2.0, 0.8);
+  g.add(le, re);
+
+  g.userData = { h: 1.6, r: 0.9 };
   return g;
 }
 
 export function spawnMobs(scene) {
-  const defs = [ {x: player.pos.x+2.5, z: player.pos.z+0.4, mk: makeTroll, spd: .9, type: 'troll'} ];
+  const defs = [ 
+    { x: player.pos.x + 10, z: player.pos.z + 5, mk: makeTroll, spd: 3.5, type: 'troll' },
+    { x: player.pos.x - 10, z: player.pos.z - 8, mk: makeRabbitMan, spd: 4.8, type: 'rabbit' } // Кролик быстрее
+  ];
+
   for (const d of defs) {
     const mob = d.mk();
-    mob.userData = Object.assign(mob.userData||{}, {vx:0, vz:0, walkT:0, idleT:0, headT:0, screamDone:false, spd:d.spd, mobType:d.type});
-    genChunk(Math.floor(d.x/CHUNK), Math.floor(d.z/CHUNK));
-    mob.position.set(d.x, groundY(d.x, d.z), d.z);
+    mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type});
+    genChunk(Math.floor(d.x / CHUNK), Math.floor(d.z / CHUNK));
+    mob.position.set(d.x, groundY(d.x, d.z) + 5, d.z); // Спавн чуть выше земли
     scene.add(mob); mobs.push(mob);
   }
 }
 
+function triggerDeath() {
+  if (isDead) return;
+  isDead = true;
+  document.exitPointerLock(); // Освобождаем мышь
+  
+  const skull = document.getElementById('skull');
+  const emoji = document.getElementById('skullemoji');
+  
+  skull.style.display = 'flex';
+  skull.style.background = 'rgba(0,0,0,0.8)';
+  
+  // Анимация увеличения черепа (скример)
+  requestAnimationFrame(() => {
+    emoji.style.fontSize = '300px';
+    emoji.style.animation = 'skullpulse 0.5s infinite';
+  });
+}
+
 export function updateMobs(dt) {
+  if (isDead) return;
+
   closestMobDist = 999;
   const cx = player.pos.x, cz = player.pos.z;
+
   for (const m of mobs) {
     const d = m.userData;
-    const dx = cx - m.position.x, dz = cz - m.position.z;
+    
+    // 1. Физика и гравитация моба
+    d.vy -= P.grav * dt; 
+    m.position.y += d.vy * dt;
+    
+    const gy = groundY(m.position.x, m.position.z);
+    if (m.position.y < gy) {
+      m.position.y = gy;
+      d.vy = 0;
+    }
+
+    // 2. Логика преследования (A* тут избыточен, используем векторное сближение)
+    const dx = cx - m.position.x;
+    const dz = cz - m.position.z;
     const dist = Math.hypot(dx, dz) || 1;
     closestMobDist = Math.min(closestMobDist, dist);
     
-    // ... логика преследования (тут твой код updateMobs) ...
+    if (dist > 1.0 && dist < 40) { // Агрятся только в радиусе 40 блоков
+      // Нормализация вектора и движение
+      m.position.x += (dx / dist) * d.spd * dt;
+      m.position.z += (dz / dist) * d.spd * dt;
+      
+      // Поворот моба лицом к игроку
+      m.rotation.y = Math.atan2(dx, dz);
+    }
+
+    // 3. Проверка убийства (Учитываем радиус моба и разницу по высоте)
+    if (dist < (d.r + P.r + 0.2) && Math.abs(player.pos.y - m.position.y) < d.h) {
+      triggerDeath();
+    }
   }
 }
