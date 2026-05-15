@@ -31,9 +31,8 @@ function getTex(hexColor, noiseLevel = 0.12) {
   return new THREE.MeshLambertMaterial({ map: tex });
 }
 
-// ИСПРАВЛЕНИЕ ФИЗИКИ: Универсальная функция коллизии для любых объектов
 export function col(pos, r = P.r, h = P.h) {
-  const eps = 0.001; // Защита от застревания в стыках блоков
+  const eps = 0.001; 
   for (let x = Math.floor(pos.x - r + eps); x <= Math.floor(pos.x + r - eps); x++)
     for (let y = Math.floor(pos.y); y <= Math.floor(pos.y + h - eps); y++)
       for (let z = Math.floor(pos.z - r + eps); z <= Math.floor(pos.z + r - eps); z++)
@@ -42,7 +41,7 @@ export function col(pos, r = P.r, h = P.h) {
 }
 
 export function groundY(x, z) {
-  genChunk(Math.floor(x / CHUNK), Math.floor(z / CHUNK));
+  // Убрали вызов genChunk, он здесь вреден. Спавнер должен сам грузить чанк.
   let y = CH - 1;
   while (y > 1 && !gbw(Math.round(x), y, Math.round(z))) y--;
   return y + .02;
@@ -125,8 +124,8 @@ export function spawnMobs(scene) {
   for (const d of defs) {
     const mob = d.mk();
     mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type, onG: false});
+    // Заблаговременная загрузка чанка перед запросом высоты groundY
     genChunk(Math.floor(d.x / CHUNK), Math.floor(d.z / CHUNK));
-    // Спавним мобов в воздухе, чтобы они упали на землю по правильной физике
     mob.position.set(d.x, groundY(d.x, d.z) + 3, d.z);
     scene.add(mob); mobs.push(mob);
   }
@@ -182,6 +181,10 @@ function triggerDeath() {
   setTimeout(resetGame, 3500);
 }
 
+// Пулинг векторов: убираем мусор в цикле
+const tMobPos = new THREE.Vector3();
+const tMobStep = new THREE.Vector3();
+
 export function updateMobs(dt) {
   closestMobDist = 999;
   const cx = player.pos.x, cz = player.pos.z;
@@ -189,40 +192,35 @@ export function updateMobs(dt) {
   for (const m of mobs) {
     const d = m.userData;
     
-    // Гравитация
     d.vy -= P.grav * dt; 
     d.onG = false;
 
-    // Внутренняя функция для просчета коллизий моба по оси (слайдинг и авто-шаг)
     const moveMobAxis = (axis, amt) => {
       if (!amt) return;
       const s = Math.sign(amt); let rem = amt;
       while (Math.abs(rem) > 1e-4) {
         const step = Math.min(Math.abs(rem), 0.05) * s;
-        const t = m.position.clone(); t[axis] += step;
+        tMobPos.copy(m.position); tMobPos[axis] += step;
 
-        if (!col(t, d.r, d.h)) {
-            m.position.copy(t); rem -= step; continue;
+        if (!col(tMobPos, d.r, d.h)) {
+            m.position.copy(tMobPos); rem -= step; continue;
         }
         
-        // Автоматический шаг (чтобы забираться на горы в 1 блок)
         if (axis !== 'y' && d.onG) {
-          const ts = t.clone(); ts.y += 1.02;
-          if (!col(ts, d.r, d.h)) {
-              m.position.copy(ts); rem -= step; continue;
+          tMobStep.copy(tMobPos); tMobStep.y += 1.02;
+          if (!col(tMobStep, d.r, d.h)) {
+              m.position.copy(tMobStep); rem -= step; continue;
           }
         }
         
-        // Стена/Земля
         if (axis === 'y') {
-            if (s < 0) d.onG = true; // Коснулись земли
+            if (s < 0) d.onG = true; 
             d.vy = 0;
         }
         break;
       }
     };
 
-    // 1. Применяем падение
     moveMobAxis('y', d.vy * dt);
 
     if (!player.dead) {
@@ -232,7 +230,6 @@ export function updateMobs(dt) {
       closestMobDist = Math.min(closestMobDist, dist);
       
       if (dist > 1.0 && dist < 40) {
-        // 2. Движение к игроку по X и Z (теперь с физикой блоков!)
         moveMobAxis('x', (dx / dist) * d.spd * dt);
         moveMobAxis('z', (dz / dist) * d.spd * dt);
         m.rotation.y = Math.atan2(dx, dz);
