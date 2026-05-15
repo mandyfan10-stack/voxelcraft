@@ -26,7 +26,6 @@ export function raycast(camera) {
   const eye = new THREE.Vector3(player.pos.x, player.pos.y + P.eye, player.pos.z);
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
-
   let x = Math.floor(eye.x), y = Math.floor(eye.y), z = Math.floor(eye.z);
   const stepX = Math.sign(dir.x), stepY = Math.sign(dir.y), stepZ = Math.sign(dir.z);
   const tDeltaX = stepX !== 0 ? Math.abs(1 / dir.x) : Infinity;
@@ -49,28 +48,18 @@ export function raycast(camera) {
   return null;
 }
 
-// Утилита для создания блоков
 function b(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
-// --- МОДЕЛЬ 1: Пузатый тролль с безумной улыбкой ---
 export function makeTroll() {
   const g = new THREE.Group();
   const fleshMat = new THREE.MeshLambertMaterial({color: 0xdfa890});
-  const shirtMat = new THREE.MeshLambertMaterial({color: 0x5a6b3c}); // Зеленая футболка
+  const shirtMat = new THREE.MeshLambertMaterial({color: 0x5a6b3c});
   const eyeMat = new THREE.MeshLambertMaterial({color: 0xffffff});
   const pupilMat = new THREE.MeshLambertMaterial({color: 0x000000});
 
-  // Огромное пузо
-  const body = b(1.4, 1.2, 1.4, shirtMat);
-  body.position.y = 0.6;
-  g.add(body);
+  const body = b(1.4, 1.2, 1.4, shirtMat); body.position.y = 0.6; g.add(body);
+  const head = b(0.8, 0.8, 0.8, fleshMat); head.position.set(0, 1.6, 0.2); g.add(head);
 
-  // Голова
-  const head = b(0.8, 0.8, 0.8, fleshMat);
-  head.position.set(0, 1.6, 0.2);
-  g.add(head);
-
-  // Выпученные глаза
   const le = b(0.3, 0.3, 0.3, eyeMat); le.position.set(-0.25, 1.8, 0.6);
   const lp = b(0.1, 0.1, 0.1, pupilMat); lp.position.set(-0.25, 1.8, 0.76);
   const re = b(0.3, 0.3, 0.3, eyeMat); re.position.set(0.25, 1.8, 0.6);
@@ -81,24 +70,14 @@ export function makeTroll() {
   return g;
 }
 
-// --- МОДЕЛЬ 2: Кролик с лицом мужика ---
 export function makeRabbitMan() {
   const g = new THREE.Group();
   const furMat = new THREE.MeshLambertMaterial({color: 0xeeeeee});
   const faceMat = new THREE.MeshLambertMaterial({color: 0xf5c3a9});
   const earMat = new THREE.MeshLambertMaterial({color: 0xffb6c1});
 
-  // Огромное круглое/кубическое тело
-  const body = b(1.8, 1.6, 1.8, furMat);
-  body.position.y = 0.8;
-  g.add(body);
-
-  // Плоское человеческое лицо спереди
-  const face = b(0.7, 0.5, 0.1, faceMat);
-  face.position.set(0, 1.2, 0.95);
-  g.add(face);
-
-  // Кроличьи уши
+  const body = b(1.8, 1.6, 1.8, furMat); body.position.y = 0.8; g.add(body);
+  const face = b(0.7, 0.5, 0.1, faceMat); face.position.set(0, 1.2, 0.95); g.add(face);
   const le = b(0.15, 0.7, 0.1, earMat); le.position.set(-0.3, 2.0, 0.8);
   const re = b(0.15, 0.7, 0.1, earMat); re.position.set(0.3, 2.0, 0.8);
   g.add(le, re);
@@ -109,23 +88,42 @@ export function makeRabbitMan() {
 
 export function spawnMobs(scene) {
   const defs = [ 
-    { x: player.pos.x + 10, z: player.pos.z + 5, mk: makeTroll, spd: 3.5, type: 'troll' },
-    { x: player.pos.x - 10, z: player.pos.z - 8, mk: makeRabbitMan, spd: 4.8, type: 'rabbit' } // Кролик быстрее
+    { x: player.pos.x + 15, z: player.pos.z + 10, mk: makeTroll, spd: 3.5, type: 'troll' },
+    { x: player.pos.x - 15, z: player.pos.z - 15, mk: makeRabbitMan, spd: 4.8, type: 'rabbit' }
   ];
 
   for (const d of defs) {
     const mob = d.mk();
     mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type});
     genChunk(Math.floor(d.x / CHUNK), Math.floor(d.z / CHUNK));
-    mob.position.set(d.x, groundY(d.x, d.z) + 5, d.z); // Спавн чуть выше земли
+    mob.position.set(d.x, groundY(d.x, d.z) + 5, d.z);
     scene.add(mob); mobs.push(mob);
+  }
+}
+
+// Система перезапуска
+export function resetGame() {
+  isDead = false;
+  player.pos.set(0, groundY(0,0) + 2, 0);
+  player.vel.set(0, 0, 0);
+  player.yaw = 0;
+  player.pitch = -.1;
+  
+  document.getElementById('skull').style.display = 'none';
+  document.getElementById('skullemoji').style.fontSize = '0px';
+  document.getElementById('skullemoji').style.animation = 'none';
+
+  // Откидываем мобов обратно
+  if (mobs.length >= 2) {
+    mobs[0].position.set(player.pos.x + 15, groundY(player.pos.x + 15, player.pos.z + 10) + 5, player.pos.z + 10);
+    mobs[1].position.set(player.pos.x - 15, groundY(player.pos.x - 15, player.pos.z - 15) + 5, player.pos.z - 15);
   }
 }
 
 function triggerDeath() {
   if (isDead) return;
   isDead = true;
-  document.exitPointerLock(); // Освобождаем мышь
+  document.exitPointerLock(); 
   
   const skull = document.getElementById('skull');
   const emoji = document.getElementById('skullemoji');
@@ -133,23 +131,23 @@ function triggerDeath() {
   skull.style.display = 'flex';
   skull.style.background = 'rgba(0,0,0,0.8)';
   
-  // Анимация увеличения черепа (скример)
   requestAnimationFrame(() => {
     emoji.style.fontSize = '300px';
     emoji.style.animation = 'skullpulse 0.5s infinite';
   });
+
+  // Авто-воскрешение через 3.5 секунды
+  setTimeout(resetGame, 3500);
 }
 
 export function updateMobs(dt) {
-  if (isDead) return;
-
   closestMobDist = 999;
   const cx = player.pos.x, cz = player.pos.z;
 
   for (const m of mobs) {
     const d = m.userData;
     
-    // 1. Физика и гравитация моба
+    // Гравитация мобов работает всегда
     d.vy -= P.grav * dt; 
     m.position.y += d.vy * dt;
     
@@ -159,24 +157,22 @@ export function updateMobs(dt) {
       d.vy = 0;
     }
 
-    // 2. Логика преследования (A* тут избыточен, используем векторное сближение)
-    const dx = cx - m.position.x;
-    const dz = cz - m.position.z;
-    const dist = Math.hypot(dx, dz) || 1;
-    closestMobDist = Math.min(closestMobDist, dist);
-    
-    if (dist > 1.0 && dist < 40) { // Агрятся только в радиусе 40 блоков
-      // Нормализация вектора и движение
-      m.position.x += (dx / dist) * d.spd * dt;
-      m.position.z += (dz / dist) * d.spd * dt;
+    // Мобы двигаются к игроку только если он жив
+    if (!isDead) {
+      const dx = cx - m.position.x;
+      const dz = cz - m.position.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      closestMobDist = Math.min(closestMobDist, dist);
       
-      // Поворот моба лицом к игроку
-      m.rotation.y = Math.atan2(dx, dz);
-    }
+      if (dist > 1.0 && dist < 40) {
+        m.position.x += (dx / dist) * d.spd * dt;
+        m.position.z += (dz / dist) * d.spd * dt;
+        m.rotation.y = Math.atan2(dx, dz);
+      }
 
-    // 3. Проверка убийства (Учитываем радиус моба и разницу по высоте)
-    if (dist < (d.r + P.r + 0.2) && Math.abs(player.pos.y - m.position.y) < d.h) {
-      triggerDeath();
+      if (dist < (d.r + P.r + 0.2) && Math.abs(player.pos.y - m.position.y) < d.h) {
+        triggerDeath();
+      }
     }
   }
 }
