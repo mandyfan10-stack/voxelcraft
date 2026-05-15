@@ -2,10 +2,37 @@ import * as THREE from 'three';
 import { P, REACH, CHUNK, CH } from './config.js';
 import { gbw, genChunk } from './world.js';
 
-// ДОБАВЛЕНО: Флаг dead прямо в объекте игрока!
 export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -.1, onG: false, dead: false };
 export const mobs = [];
 export let closestMobDist = 999;
+
+// ИСПРАВЛЕНО: Процедурная генерация воксельных текстур с шумом!
+function getTex(hexColor, noiseLevel = 0.12) {
+  const size = 16;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  
+  const base = new THREE.Color(hexColor);
+  const hsl = { h: 0, s: 0, l: 0 }; 
+  base.getHSL(hsl);
+  
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      // Генерируем пиксельный разброс яркости
+      const n = (Math.random() - 0.5) * noiseLevel;
+      const c = new THREE.Color().setHSL(hsl.h, hsl.s, Math.max(0, Math.min(1, hsl.l + n)));
+      ctx.fillStyle = '#' + c.getHexString();
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  
+  const tex = new THREE.CanvasTexture(canvas);
+  // Магические фильтры для пиксель-арта без размытия:
+  tex.magFilter = THREE.NearestFilter; 
+  tex.minFilter = THREE.NearestFilter;
+  return new THREE.MeshLambertMaterial({ map: tex });
+}
 
 export function col(pos) {
   for (let x = Math.floor(pos.x - P.r); x <= Math.floor(pos.x + P.r); x++)
@@ -50,38 +77,46 @@ export function raycast(camera) {
 
 function b(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
+// Применяем текстурные материалы!
+const M_FLESH = getTex(0xdfa890);
+const M_SHIRT = getTex(0x4a5b2c);
+const M_FUR = getTex(0xeeeeee);
+const M_EARS = getTex(0xffb6c1);
+const M_FACE = getTex(0xf5c3a9);
+const M_EYE = new THREE.MeshLambertMaterial({color: 0xffffff}); // Глаза оставим чистыми белыми
+const M_PUPIL = new THREE.MeshLambertMaterial({color: 0x000000});
+
 export function makeTroll() {
   const g = new THREE.Group();
-  const fleshMat = new THREE.MeshLambertMaterial({color: 0xdfa890});
-  const shirtMat = new THREE.MeshLambertMaterial({color: 0x5a6b3c});
-  const eyeMat = new THREE.MeshLambertMaterial({color: 0xffffff});
-  const pupilMat = new THREE.MeshLambertMaterial({color: 0x000000});
+  const body = b(1.4, 1.2, 1.4, M_SHIRT); body.position.y = 0.6; g.add(body);
+  const head = b(0.8, 0.8, 0.8, M_FLESH); head.position.set(0, 1.6, 0.2); g.add(head);
 
-  const body = b(1.4, 1.2, 1.4, shirtMat); body.position.y = 0.6; g.add(body);
-  const head = b(0.8, 0.8, 0.8, fleshMat); head.position.set(0, 1.6, 0.2); g.add(head);
+  // Выпученные глаза
+  const le = b(0.3, 0.3, 0.3, M_EYE); le.position.set(-0.25, 1.8, 0.6);
+  const lp = b(0.1, 0.1, 0.1, M_PUPIL); lp.position.set(-0.25, 1.8, 0.76);
+  const re = b(0.3, 0.3, 0.3, M_EYE); re.position.set(0.25, 1.8, 0.6);
+  const rp = b(0.1, 0.1, 0.1, M_PUPIL); rp.position.set(0.25, 1.8, 0.76);
+  
+  // Добавим волосы троллю (для реалистичности по фото)
+  const hair = b(1.0, 0.3, 0.9, getTex(0x221100)); hair.position.set(0, 2.05, 0.1);
 
-  const le = b(0.3, 0.3, 0.3, eyeMat); le.position.set(-0.25, 1.8, 0.6);
-  const lp = b(0.1, 0.1, 0.1, pupilMat); lp.position.set(-0.25, 1.8, 0.76);
-  const re = b(0.3, 0.3, 0.3, eyeMat); re.position.set(0.25, 1.8, 0.6);
-  const rp = b(0.1, 0.1, 0.1, pupilMat); rp.position.set(0.25, 1.8, 0.76);
-  g.add(le, lp, re, rp);
-
+  g.add(le, lp, re, rp, hair);
   g.userData = { h: 2.0, r: 0.7 };
   return g;
 }
 
 export function makeRabbitMan() {
   const g = new THREE.Group();
-  const furMat = new THREE.MeshLambertMaterial({color: 0xeeeeee});
-  const faceMat = new THREE.MeshLambertMaterial({color: 0xf5c3a9});
-  const earMat = new THREE.MeshLambertMaterial({color: 0xffb6c1});
+  const body = b(1.8, 1.6, 1.8, M_FUR); body.position.y = 0.8; g.add(body);
+  const face = b(0.7, 0.5, 0.1, M_FACE); face.position.set(0, 1.2, 0.95); g.add(face);
+  
+  // Уши кролика
+  const le = b(0.2, 0.8, 0.1, M_FUR); le.position.set(-0.3, 2.0, 0.8);
+  const leIn = b(0.1, 0.6, 0.11, M_EARS); leIn.position.set(-0.3, 2.0, 0.81);
+  const re = b(0.2, 0.8, 0.1, M_FUR); re.position.set(0.3, 2.0, 0.8);
+  const reIn = b(0.1, 0.6, 0.11, M_EARS); reIn.position.set(0.3, 2.0, 0.81);
 
-  const body = b(1.8, 1.6, 1.8, furMat); body.position.y = 0.8; g.add(body);
-  const face = b(0.7, 0.5, 0.1, faceMat); face.position.set(0, 1.2, 0.95); g.add(face);
-  const le = b(0.15, 0.7, 0.1, earMat); le.position.set(-0.3, 2.0, 0.8);
-  const re = b(0.15, 0.7, 0.1, earMat); re.position.set(0.3, 2.0, 0.8);
-  g.add(le, re);
-
+  g.add(le, leIn, re, reIn);
   g.userData = { h: 1.6, r: 0.9 };
   return g;
 }
@@ -101,11 +136,8 @@ export function spawnMobs(scene) {
   }
 }
 
-// Надежный сброс игры
 export function resetGame() {
   player.dead = false;
-  
-  // Кидаем игрока с высоты, чтобы он плавно упал и не застрял
   player.pos.set(0, groundY(0,0) + 15, 0);
   player.vel.set(0, 0, 0);
   player.yaw = 0;
@@ -120,7 +152,6 @@ export function resetGame() {
     emoji.style.animation = 'none';
   }
 
-  // Безопасный отброс мобов
   try {
     if (mobs.length >= 2) {
       mobs[0].position.set(15, groundY(15, 10) + 5, 10);
@@ -152,7 +183,6 @@ function triggerDeath() {
     });
   }
 
-  // 100% вызовет респавн через 3.5 секунды
   setTimeout(resetGame, 3500);
 }
 
@@ -172,7 +202,6 @@ export function updateMobs(dt) {
       d.vy = 0;
     }
 
-    // Мобы атакуют только живого игрока
     if (!player.dead) {
       const dx = cx - m.position.x;
       const dz = cz - m.position.z;
