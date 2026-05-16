@@ -4,10 +4,9 @@
   <meta charset="UTF-8"/>
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
-                 script-src 'self' 'unsafe-eval';
+                 script-src 'self';
                  style-src  'self' 'unsafe-inline';
-                 img-src    'self' data: blob:;
-                 connect-src 'self';">
+                 img-src    'self' data: blob:;">
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>VoxelFear</title>
   <link rel="stylesheet" href="style.css">
@@ -38,18 +37,17 @@
   <!-- React ecosystem (vendored locally) -->
   <script src="js/vendor/react.production.min.js"></script>
   <script src="js/vendor/react-dom.production.min.js"></script>
-  <script src="js/vendor/babel.min.js"></script>
 
-  <!-- UI components (Babel transforms JSX on the fly) -->
-  <script type="text/babel" data-presets="react" src="ui/tweaks-panel.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/voxel-bg.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/creature.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/main-menu.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/hud.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/inventory.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/death.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/settings.jsx"></script>
-  <script type="text/babel" data-presets="react" src="ui/app.jsx"></script>
+  <!-- UI components — pre-compiled from ui/*.jsx via `npm run build:ui` -->
+  <script src="ui/tweaks-panel.js"></script>
+  <script src="ui/voxel-bg.js"></script>
+  <script src="ui/creature.js"></script>
+  <script src="ui/main-menu.js"></script>
+  <script src="ui/hud.js"></script>
+  <script src="ui/inventory.js"></script>
+  <script src="ui/death.js"></script>
+  <script src="ui/settings.js"></script>
+  <script src="ui/app.js"></script>
 
   <!-- Three.js game (ES module — loads concurrently; bridge is already ready) -->
   <script type="module" src="js/main.js"></script>
