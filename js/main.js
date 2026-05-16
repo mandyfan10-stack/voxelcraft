@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt } from './world.js';
 import { player, raycast, checkCollision, spawnMobs, updateMobs, groundY } from './entities.js';
@@ -37,6 +37,15 @@ window.addEventListener('blur', () => {
 
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => { if (!player.dead) cvs.requestPointerLock(); });
+
+cvs.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  const hud = document.getElementById('hud');
+  hud.textContent = 'WebGL context lost. Please reload the page.';
+  hud.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:18px;background:rgba(0,0,0,.8);padding:20px;border-radius:8px;z-index:999;';
+}, false);
+
+cvs.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
 document.addEventListener('pointerlockchange', () => locked = document.pointerLockElement === cvs);
 
 document.addEventListener('mousemove', e => { 
@@ -112,8 +121,7 @@ function updateChunks() {
   });
 
   for (const k of chunkMeshes.keys()) {
-    const cx = Math.floor(k / 16777216) - 8388608;
-    const cz = (k % 16777216) - 8388608;
+    const [cx, cz] = k.split(',').map(Number);
     if (Math.abs(cx - pcx) > RENDERING_DISTANCE + 1 || Math.abs(cz - pcz) > RENDERING_DISTANCE + 1) {
       const m = chunkMeshes.get(k); 
       scene.remove(m); 
@@ -124,10 +132,9 @@ function updateChunks() {
     }
   }
   
-  for (const k of dirtyChunks) { 
-    const cx = Math.floor(k / 16777216) - 8388608;
-    const cz = (k % 16777216) - 8388608;
-    makeChunkMesh(cx, cz, scene); 
+  for (const k of dirtyChunks) {
+    const [cx, cz] = k.split(',').map(Number);
+    makeChunkMesh(cx, cz, scene);
   }
   dirtyChunks.clear();
 }

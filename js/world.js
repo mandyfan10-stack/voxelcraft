@@ -1,13 +1,28 @@
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT, BLOCK_COLORS } from './config.js';
 
 export const worldData = new Map();
 export const chunkMeshes = new Map();
 export const dirtyChunks = new Set();
 
-// Безопасный расчет ключа чанка без bitwise-overflow для неограниченного мира
-export const getChunkKey = (cx, cz) => (cx + 8388608) * 16777216 + (cz + 8388608);
-    
+export const getChunkKey = (cx, cz) => `${cx},${cz}`;
+
+function chunkSeed(cx, cz) {
+  let h = (cx * 1664525 + cz * 1013904223) ^ 0xdeadbeef;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  return h ^ (h >>> 16);
+}
+
+function mulberry32(seed) {
+  return function() {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 const getVoxelIndex = (lx, y, lz) => (y * CHUNK_SIZE + lz) * CHUNK_SIZE + lx;
 
 export function genChunk(cx, cz) {
@@ -15,13 +30,14 @@ export function genChunk(cx, cz) {
   if (worldData.has(key)) return;
   const arr = new Int8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
   worldData.set(key, arr);
-  
+  const rng = mulberry32(chunkSeed(cx, cz));
+
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
       const wx = cx * CHUNK_SIZE + lx, wz = cz * CHUNK_SIZE + lz;
       const h = Math.max(2, Math.min(CHUNK_HEIGHT - 3, Math.floor(8 + Math.sin(wx * .13) * 1.8 + Math.cos(wz * .11) * 2.2 + Math.sin((wx - wz) * .07) * 2.6 + Math.cos((wx + wz * 1.1) * .05) * 2.2)));
       const snow = h > 13, sand = h < 5;
-      
+
       for (let y = 0; y <= h; y++) {
         let id = 3;
         if (y === h) id = snow ? 8 : (sand ? 5 : 1);
@@ -29,7 +45,7 @@ export function genChunk(cx, cz) {
         arr[getVoxelIndex(lx, y, lz)] = id;
       }
       if (h < 5) for (let y = h + 1; y <= 5; y++) arr[getVoxelIndex(lx, y, lz)] = 7;
-      if (!snow && !sand && h >= 5 && Math.random() < .022 && lx > 1 && lz > 1 && lx < 14 && lz < 14) {
+      if (!snow && !sand && h >= 5 && rng() < .022 && lx > 1 && lz > 1 && lx < 14 && lz < 14) {
         for (let i = 1; i <= 4; i++) arr[getVoxelIndex(lx, h + i, lz)] = 4;
         for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 3; dy <= 5; dy++) {
           const d = Math.abs(dx) + Math.abs(dz) + Math.abs(dy - 4), x2 = lx + dx, z2 = lz + dz, y2 = h + dy;

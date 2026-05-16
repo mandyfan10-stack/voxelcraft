@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from './vendor/three.module.js';
 import { PLAYER_CONFIG, REACH_DISTANCE, CHUNK_SIZE, CHUNK_HEIGHT } from './config.js';
 import { getBlockAt, genChunk } from './world.js';
 
