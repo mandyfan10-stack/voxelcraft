@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { P, REACH, CHUNK, CH } from './config.js';
-import { gbw, genChunk } from './world.js';
+import { PLAYER_CONFIG, REACH_DISTANCE, CHUNK_SIZE, CHUNK_HEIGHT } from './config.js';
+import { getBlockAt, genChunk } from './world.js';
 
 export const player = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: -.1, onG: false, dead: false };
 export const mobs = [];
@@ -31,24 +31,23 @@ function getTex(hexColor, noiseLevel = 0.12) {
   return new THREE.MeshLambertMaterial({ map: tex });
 }
 
-export function col(pos, r = P.r, h = P.h) {
+export function checkCollision(pos, r = PLAYER_CONFIG.radius, h = PLAYER_CONFIG.height) {
   const eps = 0.001; 
   for (let x = Math.floor(pos.x - r + eps); x <= Math.floor(pos.x + r - eps); x++)
     for (let y = Math.floor(pos.y); y <= Math.floor(pos.y + h - eps); y++)
       for (let z = Math.floor(pos.z - r + eps); z <= Math.floor(pos.z + r - eps); z++)
-        if (gbw(x, y, z) > 0) return true;
+        if (getBlockAt(x, y, z) > 0) return true;
   return false;
 }
 
 export function groundY(x, z) {
-  // Убрали вызов genChunk, он здесь вреден. Спавнер должен сам грузить чанк.
-  let y = CH - 1;
-  while (y > 1 && !gbw(Math.round(x), y, Math.round(z))) y--;
+  let y = CHUNK_HEIGHT - 1;
+  while (y > 1 && !getBlockAt(Math.round(x), y, Math.round(z))) y--;
   return y + .02;
 }
 
 export function raycast(camera) {
-  const eye = new THREE.Vector3(player.pos.x, player.pos.y + P.eye, player.pos.z);
+  const eye = new THREE.Vector3(player.pos.x, player.pos.y + PLAYER_CONFIG.eyeHeight, player.pos.z);
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   let x = Math.floor(eye.x), y = Math.floor(eye.y), z = Math.floor(eye.z);
@@ -61,8 +60,8 @@ export function raycast(camera) {
   let tMaxZ = stepZ > 0 ? (z + 1 - eye.z) * tDeltaZ : (eye.z - z) * tDeltaZ;
 
   let prev = null;
-  for (let i = 0; i < REACH * 3; i++) {
-    if (gbw(x, y, z) > 0) return { hit: [x, y, z], prev };
+  for (let i = 0; i < REACH_DISTANCE * 3; i++) {
+    if (getBlockAt(x, y, z) > 0) return { hit: [x, y, z], prev };
     prev = [x, y, z];
     if (tMaxX < tMaxY) {
       if (tMaxX < tMaxZ) { x += stepX; tMaxX += tDeltaX; } else { z += stepZ; tMaxZ += tDeltaZ; }
@@ -73,7 +72,7 @@ export function raycast(camera) {
   return null;
 }
 
-function b(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
+function createBoxMesh(w, h, d, m) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); }
 
 const M_FLESH = getTex(0xdfa890);
 const M_SHIRT = getTex(0x4a5b2c);
@@ -85,15 +84,15 @@ const M_PUPIL = new THREE.MeshLambertMaterial({color: 0x000000});
 
 export function makeTroll() {
   const g = new THREE.Group();
-  const body = b(1.4, 1.2, 1.4, M_SHIRT); body.position.y = 0.6; g.add(body);
-  const head = b(0.8, 0.8, 0.8, M_FLESH); head.position.set(0, 1.6, 0.2); g.add(head);
+  const body = createBoxMesh(1.4, 1.2, 1.4, M_SHIRT); body.position.y = 0.6; g.add(body);
+  const head = createBoxMesh(0.8, 0.8, 0.8, M_FLESH); head.position.set(0, 1.6, 0.2); g.add(head);
 
-  const le = b(0.3, 0.3, 0.3, M_EYE); le.position.set(-0.25, 1.8, 0.6);
-  const lp = b(0.1, 0.1, 0.1, M_PUPIL); lp.position.set(-0.25, 1.8, 0.76);
-  const re = b(0.3, 0.3, 0.3, M_EYE); re.position.set(0.25, 1.8, 0.6);
-  const rp = b(0.1, 0.1, 0.1, M_PUPIL); rp.position.set(0.25, 1.8, 0.76);
+  const le = createBoxMesh(0.3, 0.3, 0.3, M_EYE); le.position.set(-0.25, 1.8, 0.6);
+  const lp = createBoxMesh(0.1, 0.1, 0.1, M_PUPIL); lp.position.set(-0.25, 1.8, 0.76);
+  const re = createBoxMesh(0.3, 0.3, 0.3, M_EYE); re.position.set(0.25, 1.8, 0.6);
+  const rp = createBoxMesh(0.1, 0.1, 0.1, M_PUPIL); rp.position.set(0.25, 1.8, 0.76);
   
-  const hair = b(1.0, 0.3, 0.9, getTex(0x221100)); hair.position.set(0, 2.05, 0.1);
+  const hair = createBoxMesh(1.0, 0.3, 0.9, getTex(0x221100)); hair.position.set(0, 2.05, 0.1);
 
   g.add(le, lp, re, rp, hair);
   g.userData = { h: 2.0, r: 0.7 };
@@ -102,13 +101,13 @@ export function makeTroll() {
 
 export function makeRabbitMan() {
   const g = new THREE.Group();
-  const body = b(1.8, 1.6, 1.8, M_FUR); body.position.y = 0.8; g.add(body);
-  const face = b(0.7, 0.5, 0.1, M_FACE); face.position.set(0, 1.2, 0.95); g.add(face);
+  const body = createBoxMesh(1.8, 1.6, 1.8, M_FUR); body.position.y = 0.8; g.add(body);
+  const face = createBoxMesh(0.7, 0.5, 0.1, M_FACE); face.position.set(0, 1.2, 0.95); g.add(face);
   
-  const le = b(0.2, 0.8, 0.1, M_FUR); le.position.set(-0.3, 2.0, 0.8);
-  const leIn = b(0.1, 0.6, 0.11, M_EARS); leIn.position.set(-0.3, 2.0, 0.81);
-  const re = b(0.2, 0.8, 0.1, M_FUR); re.position.set(0.3, 2.0, 0.8);
-  const reIn = b(0.1, 0.6, 0.11, M_EARS); reIn.position.set(0.3, 2.0, 0.81);
+  const le = createBoxMesh(0.2, 0.8, 0.1, M_FUR); le.position.set(-0.3, 2.0, 0.8);
+  const leIn = createBoxMesh(0.1, 0.6, 0.11, M_EARS); leIn.position.set(-0.3, 2.0, 0.81);
+  const re = createBoxMesh(0.2, 0.8, 0.1, M_FUR); re.position.set(0.3, 2.0, 0.8);
+  const reIn = createBoxMesh(0.1, 0.6, 0.11, M_EARS); reIn.position.set(0.3, 2.0, 0.81);
 
   g.add(le, leIn, re, reIn);
   g.userData = { h: 1.6, r: 0.9 };
@@ -124,8 +123,7 @@ export function spawnMobs(scene) {
   for (const d of defs) {
     const mob = d.mk();
     mob.userData = Object.assign(mob.userData || {}, {vy: 0, spd: d.spd, type: d.type, onG: false});
-    // Заблаговременная загрузка чанка перед запросом высоты groundY
-    genChunk(Math.floor(d.x / CHUNK), Math.floor(d.z / CHUNK));
+    genChunk(Math.floor(d.x / CHUNK_SIZE), Math.floor(d.z / CHUNK_SIZE));
     mob.position.set(d.x, groundY(d.x, d.z) + 3, d.z);
     scene.add(mob); mobs.push(mob);
   }
@@ -181,7 +179,6 @@ function triggerDeath() {
   setTimeout(resetGame, 3500);
 }
 
-// Пулинг векторов: убираем мусор в цикле
 const tMobPos = new THREE.Vector3();
 const tMobStep = new THREE.Vector3();
 
@@ -192,7 +189,7 @@ export function updateMobs(dt) {
   for (const m of mobs) {
     const d = m.userData;
     
-    d.vy -= P.grav * dt; 
+    d.vy -= PLAYER_CONFIG.gravity * dt; 
     d.onG = false;
 
     const moveMobAxis = (axis, amt) => {
@@ -202,13 +199,13 @@ export function updateMobs(dt) {
         const step = Math.min(Math.abs(rem), 0.05) * s;
         tMobPos.copy(m.position); tMobPos[axis] += step;
 
-        if (!col(tMobPos, d.r, d.h)) {
+        if (!checkCollision(tMobPos, d.r, d.h)) {
             m.position.copy(tMobPos); rem -= step; continue;
         }
         
         if (axis !== 'y' && d.onG) {
           tMobStep.copy(tMobPos); tMobStep.y += 1.02;
-          if (!col(tMobStep, d.r, d.h)) {
+          if (!checkCollision(tMobStep, d.r, d.h)) {
               m.position.copy(tMobStep); rem -= step; continue;
           }
         }
@@ -235,7 +232,7 @@ export function updateMobs(dt) {
         m.rotation.y = Math.atan2(dx, dz);
       }
 
-      if (dist < (d.r + P.r + 0.2) && Math.abs(player.pos.y - m.position.y) < d.h) {
+      if (dist < (d.r + PLAYER_CONFIG.radius + 0.2) && Math.abs(player.pos.y - m.position.y) < d.h) {
         triggerDeath();
       }
     }
