@@ -1,6 +1,8 @@
 import * as THREE from './vendor/three.module.js';
 import { PLAYER_CONFIG, REACH_DISTANCE, CHUNK_SIZE, CHUNK_HEIGHT,
-         MOB_DAMAGE_PER_SEC, PLAYER_MAX_HP, HP_REGEN_RATE, COMBAT_COOLDOWN, MAX_MOBS } from './config.js';
+         MOB_DAMAGE_PER_SEC, PLAYER_MAX_HP, HP_REGEN_RATE, COMBAT_COOLDOWN, MAX_MOBS,
+         STAMINA_MAX, HUNGER_MAX,
+         MOB_MAX_HP, MELEE_RANGE, MELEE_DAMAGE, MELEE_COOLDOWN } from './config.js';
 import { getBlockAt, genChunk } from './world.js';
 import { cycle } from './daynight.js';
 
@@ -8,7 +10,11 @@ export const player = {
   pos: new THREE.Vector3(), vel: new THREE.Vector3(),
   yaw: 0, pitch: -.1, onG: false, dead: false,
   hp: PLAYER_MAX_HP,
+  stamina: STAMINA_MAX,
+  hunger: HUNGER_MAX,
   lastDamageTime: -999,
+  lastSprintTime: -999,
+  lastMeleeTime:  -999,
 };
 
 export const mobs = [];
@@ -304,7 +310,7 @@ export function spawnMobs(scene) {
   ];
   for (const d of defs) {
     const mob = d.mk();
-    mob.userData = Object.assign(mob.userData || {}, { vy: 0, spd: d.spd, type: d.type, onG: false });
+    mob.userData = Object.assign(mob.userData || {}, { vy: 0, spd: d.spd, type: d.type, onG: false, hp: MOB_MAX_HP, dead: false });
     genChunk(Math.floor(d.x / CHUNK_SIZE), Math.floor(d.z / CHUNK_SIZE));
     mob.position.set(d.x, groundY(d.x, d.z) + 3, d.z);
     scene.add(mob);
@@ -321,7 +327,7 @@ export function spawnHordeMob(scene) {
   const sz = player.pos.z + Math.sin(angle) * dist;
   const mob = isTroll ? makeTroll() : makeRabbitMan();
   mob.userData = Object.assign(mob.userData || {}, {
-    vy: 0, spd: isTroll ? 3.5 : 4.8, type: isTroll ? 'troll' : 'rabbit', onG: false,
+    vy: 0, spd: isTroll ? 3.5 : 4.8, type: isTroll ? 'troll' : 'rabbit', onG: false, hp: MOB_MAX_HP, dead: false,
   });
   genChunk(Math.floor(sx / CHUNK_SIZE), Math.floor(sz / CHUNK_SIZE));
   mob.position.set(sx, groundY(sx, sz) + 3, sz);
@@ -329,13 +335,57 @@ export function spawnHordeMob(scene) {
   mobs.push(mob);
 }
 
-// ── Death & Reset ────────────────────────────────────────────────────────────
+// ── Melee attack ─────────────────────────────────────────────────────────────
+
+export function meleeAttack() {
+  if (player.dead || (gameTime - player.lastMeleeTime) < MELEE_COOLDOWN) return false;
+  player.lastMeleeTime = gameTime;
+  const ex = player.pos.x, ey = player.pos.y + PLAYER_CONFIG.eyeHeight, ez = player.pos.z;
+  const fwx = -Math.sin(player.yaw) * Math.cos(player.pitch);
+  const fwy =  Math.sin(player.pitch);
+  const fwz = -Math.cos(player.yaw) * Math.cos(player.pitch);
+  let hit = false;
+  for (const m of mobs) {
+    if (m.userData.dead) continue;
+    const dx = m.position.x - ex, dy = m.position.y - ey, dz = m.position.z - ez;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist < MELEE_RANGE) {
+      const dot = (fwx * dx + fwy * dy + fwz * dz) / dist;
+      if (dot > 0.45) {
+        m.userData.hp -= MELEE_DAMAGE;
+        if (m.userData.hp <= 0) m.userData.dead = true;
+        hit = true;
+      }
+    }
+  }
+  return hit;
+}
+
+// ── Mob radar blips ───────────────────────────────────────────────────────────
+
+export function getMobBlips() {
+  const RADAR_RANGE = 64;
+  return mobs.filter(m => !m.userData.dead).map(m => {
+    const dx = m.position.x - player.pos.x;
+    const dz = m.position.z - player.pos.z;
+    const dist = Math.hypot(dx, dz);
+    const worldAngleDeg = Math.atan2(dx, dz) * (180 / Math.PI);
+    const relAngle = ((worldAngleDeg - player.yaw * (180 / Math.PI)) + 720) % 360;
+    return {
+      angle: relAngle,
+      dist: Math.min(1, dist / RADAR_RANGE),
+      kind: m.userData.type === 'troll' ? 'T' : 'R',
+    };
+  });
+}
+
+// ── Death & Reset ─────────────────────────────────────────────────────────────
 
 export function resetGame() {
   player.dead = false;
   player.hp   = PLAYER_MAX_HP;
   player.lastDamageTime = -999;
-  player.pos.set(0, groundY(0,0) + 15, 0);
+  player.pos.set(0, groundY(0,0) + 3, 0);
   player.vel.set(0, 0, 0);
   player.yaw = 0; player.pitch = -.1;
 
@@ -373,6 +423,14 @@ const tMobStep = new THREE.Vector3();
 
 export function updateMobs(dt) {
   gameTime += dt;
+  // Remove dead mobs from scene
+  for (let i = mobs.length - 1; i >= 0; i--) {
+    if (mobs[i].userData.dead) {
+      if (_scene) _scene.remove(mobs[i]);
+      mobs.splice(i, 1);
+    }
+  }
+
   closestMobDist = 999;
   let inCombat = false;
   const cx = player.pos.x, cz = player.pos.z;

@@ -2,10 +2,13 @@
 
 // Distress / CRT look — applied once to the document.
 const DISTRESS = {
-  distress: 1,
-  bloodlevel: 0.75,
-  cyanlevel: 0.6,
-  scanlines: 0.5
+  distress: 0.25,
+  // grain/distress intensity — was 1
+  bloodlevel: 0.35,
+  // blood vignette tint
+  cyanlevel: 0.5,
+  // cyan glow on elements
+  scanlines: 0.12 // scanline opacity — was 0.5, main visibility killer
 };
 function App() {
   const [screen, setScreen] = React.useState("menu"); // menu | hud | inventory | settings | death

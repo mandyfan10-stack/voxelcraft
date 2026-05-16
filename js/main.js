@@ -1,7 +1,9 @@
 import * as THREE from './vendor/three.module.js';
-import { CHUNK_SIZE, PLAYER_CONFIG } from './config.js';
+import { CHUNK_SIZE, PLAYER_CONFIG,
+         SPRINT_SPEED_MULT, STAMINA_MAX, STAMINA_SPRINT_DRAIN, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
+         HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt } from './world.js';
-import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY, resetGame } from './entities.js';
+import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY, resetGame, meleeAttack, getMobBlips } from './entities.js';
 import { cycle, updateCycle, getAtmosphere, getSunDirection } from './daynight.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
@@ -26,30 +28,32 @@ const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1
 
 // ── Input ────────────────────────────────────────────────────────────────────
 
-const keys = { w: 0, a: 0, s: 0, d: 0, j: 0 };
+const keys = { w: 0, a: 0, s: 0, d: 0, j: 0, shift: 0 };
 let selIdx = 0;
 let locked = false;
 
 addEventListener('keydown', e => {
   const c = e.code;
-  if      (c === 'KeyW')  keys.w = 1;
-  else if (c === 'KeyA')  keys.a = 1;
-  else if (c === 'KeyS')  keys.s = 1;
-  else if (c === 'KeyD')  keys.d = 1;
-  else if (c === 'Space') keys.j = 1;
+  if      (c === 'KeyW')      keys.w = 1;
+  else if (c === 'KeyA')      keys.a = 1;
+  else if (c === 'KeyS')      keys.s = 1;
+  else if (c === 'KeyD')      keys.d = 1;
+  else if (c === 'Space')     keys.j = 1;
+  else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
   else if (e.key >= '1' && e.key <= '6') selIdx = +e.key - 1;
 });
 addEventListener('keyup', e => {
   const c = e.code;
-  if      (c === 'KeyW')  keys.w = 0;
-  else if (c === 'KeyA')  keys.a = 0;
-  else if (c === 'KeyS')  keys.s = 0;
-  else if (c === 'KeyD')  keys.d = 0;
-  else if (c === 'Space') keys.j = 0;
+  if      (c === 'KeyW')      keys.w = 0;
+  else if (c === 'KeyA')      keys.a = 0;
+  else if (c === 'KeyS')      keys.s = 0;
+  else if (c === 'KeyD')      keys.d = 0;
+  else if (c === 'Space')     keys.j = 0;
+  else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 0;
 });
 
 window.addEventListener('blur', () => {
-  keys.w = 0; keys.a = 0; keys.s = 0; keys.d = 0; keys.j = 0;
+  keys.w = 0; keys.a = 0; keys.s = 0; keys.d = 0; keys.j = 0; keys.shift = 0;
   wish.set(0, 0, 0);
 });
 
@@ -84,7 +88,13 @@ document.addEventListener('mousemove', e => {
 
 cvs.addEventListener('mousedown', e => {
   if (!locked || player.dead) return;
-  if (e.button === 0) { const r = raycast(camera); if (r) setBlockAt(...r.hit, 0); }
+  if (e.button === 0) {
+    // Try melee on nearby mob first; fall back to mining block
+    if (!meleeAttack()) {
+      const r = raycast(camera);
+      if (r) setBlockAt(...r.hit, 0);
+    }
+  }
   if (e.button === 2) { const r = raycast(camera); if (r && r.prev) setBlockAt(...r.prev, [1,2,3,4,5,9][selIdx]); }
 });
 
@@ -208,6 +218,8 @@ function updateHUD() {
   window.GameBridge.setState({
     hp:          Math.max(0, player.hp),
     maxHp:       100,
+    stamina:     Math.max(0, player.stamina),
+    hunger:      Math.max(0, player.hunger),
     dayCount:    cycle.dayCount,
     isNight:     cycle.isNight,
     timeFrac:    cycle.frac,
@@ -215,6 +227,7 @@ function updateHUD() {
     posY:        Math.round(player.pos.y),
     posZ:        Math.round(player.pos.z),
     hordeActive: cycle.isNight,
+    mobBlips:    getMobBlips(),
   });
 }
 
@@ -235,8 +248,32 @@ function update(dt) {
     rt.set( Math.cos(player.yaw), 0, -Math.sin(player.yaw));
     wish.copy(fw).multiplyScalar(iz);
     wish.addScaledVector(rt, ix);
-    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(PLAYER_CONFIG.speed * Math.min(len, 1));
+
+    const moving = len > 0.01;
+    const sprinting = keys.shift && moving && player.stamina > 0;
+    const speedMult = sprinting ? SPRINT_SPEED_MULT : 1.0;
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(PLAYER_CONFIG.speed * speedMult * Math.min(len, 1));
     if (player.onG && keys.j) { player.vel.y = PLAYER_CONFIG.jumpForce; player.onG = false; }
+
+    // Stamina
+    if (sprinting) {
+      player.stamina = Math.max(0, player.stamina - STAMINA_SPRINT_DRAIN * dt);
+      player.lastSprintTime = 0; // will be set below as we track elapsed
+    } else {
+      if (player._staminaRegenAcc === undefined) player._staminaRegenAcc = 0;
+      player._staminaRegenAcc += dt;
+      if (player._staminaRegenAcc > STAMINA_REGEN_DELAY) {
+        player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_RATE * dt);
+      }
+    }
+    if (sprinting) player._staminaRegenAcc = 0;
+
+    // Hunger drain
+    player.hunger = Math.max(0, player.hunger - HUNGER_DRAIN_RATE * dt);
+    if (player.hunger <= 0) {
+      player.hp -= HUNGER_STARVATION_DMG * dt;
+      if (player.hp <= 0) { player.hp = 0; /* triggerDeath handled in entities */ }
+    }
   }
 
   const ac = player.onG ? PLAYER_CONFIG.accelerationGround : PLAYER_CONFIG.accelerationAir;

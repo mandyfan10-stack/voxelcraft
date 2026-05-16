@@ -2,32 +2,43 @@
 
 function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }) {
   const [hp, setHp] = React.useState(100);
-  const [stamina, setStamina] = React.useState(46);
-  const [hunger, setHunger] = React.useState(58);
+  const [stamina, setStamina] = React.useState(100);
+  const [hunger, setHunger] = React.useState(100);
   const [selectedSlot, setSelectedSlot] = React.useState(2);
-  const [compassDeg, setCompassDeg] = React.useState(127);
+  const [compassDeg, setCompassDeg] = React.useState(0);
   const [posX, setPosX] = React.useState(0);
   const [posY, setPosY] = React.useState(64);
   const [posZ, setPosZ] = React.useState(0);
+  const [dayCount, setDayCount] = React.useState(1);
+  const [isNight, setIsNight] = React.useState(false);
+  const [timeFrac, setTimeFrac] = React.useState(0);
+  const [mobBlips, setMobBlips] = React.useState([]);
 
-  // Sync real game state from bridge
+  // Sync ALL real game state from bridge
   React.useEffect(() => {
     const handler = (s) => {
-      setHp(s.hp);
-      setPosX(s.posX);
-      setPosY(s.posY);
-      setPosZ(s.posZ);
+      setHp(s.hp ?? 100);
+      setStamina(s.stamina ?? 100);
+      setHunger(s.hunger ?? 100);
+      setPosX(s.posX ?? 0);
+      setPosY(s.posY ?? 0);
+      setPosZ(s.posZ ?? 0);
+      setDayCount(s.dayCount ?? 1);
+      setIsNight(!!s.isNight);
+      setTimeFrac(s.timeFrac ?? 0);
+      setMobBlips(s.mobBlips ?? []);
+      // Compass follows player yaw — bridge sends posX/posZ so we derive from yaw via timeFrac drift
+      // Real yaw not yet on bridge — use small animation
     };
     window.GameBridge.on('state', handler);
     return () => window.GameBridge.off('state', handler);
   }, []);
 
-  // Simulated stamina drift + compass wander
+  // Compass wander (subtle — real yaw not on bridge yet)
   React.useEffect(() => {
     const i = setInterval(() => {
-      setStamina(s => Math.max(20, Math.min(100, s + (Math.random() - 0.45) * 8)));
-      setCompassDeg(d => (d + (Math.random() - 0.5) * 6 + 360) % 360);
-    }, 900);
+      setCompassDeg(d => (d + (Math.random() - 0.5) * 3 + 360) % 360);
+    }, 600);
     return () => clearInterval(i);
   }, []);
 
@@ -73,8 +84,8 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
         display: "flex", flexDirection: "column", gap: 10,
         alignItems: "flex-end",
       }}>
-        <DayNightWidget />
-        {showMinimap && <Minimap compassDeg={compassDeg} />}
+        <DayNightWidget dayCount={dayCount} isNight={isNight} timeFrac={timeFrac} />
+        {showMinimap && <Minimap compassDeg={compassDeg} mobBlips={mobBlips} />}
       </div>
 
       {/* ── Horde alert (center-top, only when triggered) ────────── */}
@@ -155,10 +166,10 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
         textAlign: "right",
       }}>
         <div className="mono cyan" style={{ fontSize: 22, letterSpacing: "0.15em", fontWeight: 600 }}>
-          21:43
+          {fracToTime(timeFrac)}
         </div>
         <div className="mono dim" style={{ fontSize: 10, letterSpacing: "0.2em", marginTop: 2 }}>
-          ░ DUSK ░ -2°C ░ FOG INCOMING
+          ░ {timeFracToPhase(timeFrac)} ░ {mobBlips.length} HOSTILE{mobBlips.length !== 1 ? "S" : ""} ░
         </div>
       </div>
     </div>
@@ -199,7 +210,28 @@ function VitalsRow({ label, value, max, kind }) {
   );
 }
 
-function DayNightWidget() {
+// Convert 0-1 time fraction to "HH:MM" (day=06:00..18:00, night=18:00..06:00)
+function fracToTime(frac) {
+  const totalMin = Math.floor(frac * 24 * 60);
+  const h = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function timeFracToPhase(frac) {
+  if (frac < 0.25) return 'DAWN';
+  if (frac < 0.45) return 'DAY';
+  if (frac < 0.55) return 'DUSK';
+  if (frac < 0.85) return 'NIGHT';
+  return 'PRE-DAWN';
+}
+
+function DayNightWidget({ dayCount = 1, isNight = false, timeFrac = 0 }) {
+  const cycleDay = ((dayCount - 1) % 7) + 1; // position in 7-day cycle
+  const isBloodMoon = cycleDay === 7 && isNight;
+  const label = isBloodMoon ? 'BLOOD MOON' : isNight ? 'NIGHT' : 'DAY';
+  const labelColor = isBloodMoon ? 'var(--blood)' : isNight ? '#6677cc' : 'var(--bone)';
+
   return (
     <div style={{
       background: "rgba(10,9,8,0.78)",
@@ -209,27 +241,29 @@ function DayNightWidget() {
       textAlign: "right",
     }}>
       <div className="mono dim" style={{ fontSize: 10, letterSpacing: "0.2em", marginBottom: 2 }}>
-        ░ DAY 06 / 07 ░
+        ░ DAY {dayCount} / CYCLE {cycleDay}/7 ░
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
         <span className="display" style={{
-          fontSize: 28, color: "var(--blood)",
-          textShadow: "0 0 12px rgba(204,34,0,0.6)",
+          fontSize: isBloodMoon ? 28 : 22,
+          color: labelColor,
+          textShadow: isBloodMoon ? "0 0 12px rgba(204,34,0,0.6)" : isNight ? "0 0 8px rgba(100,120,204,0.5)" : "none",
           letterSpacing: "0.06em",
           fontWeight: 700,
+          animation: isBloodMoon ? "flicker 1.5s infinite" : "none",
         }}>
-          BLOOD MOON
+          {label}
         </span>
       </div>
-      {/* day progress bar — 7 ticks */}
+      {/* 7-day cycle progress ticks */}
       <div style={{ display: "flex", gap: 3, marginTop: 8, justifyContent: "flex-end" }}>
         {[1,2,3,4,5,6,7].map(n => (
           <div key={n} style={{
             width: 26, height: 6,
-            background: n <= 6 ? (n === 7 ? "var(--blood)" : "var(--rust)") : "var(--steel-2)",
+            background: n < cycleDay ? "var(--rust)" : n === cycleDay ? (isBloodMoon ? "var(--blood)" : "var(--olive)") : "var(--steel-2)",
             border: "1px solid #0a0908",
-            opacity: n === 7 ? 1 : (n <= 6 ? 0.85 : 0.4),
-            ...(n === 7 ? { animation: "flicker 1.5s infinite", background: "var(--blood)" } : {}),
+            opacity: n < cycleDay ? 0.85 : n === cycleDay ? 1 : 0.4,
+            ...(n === cycleDay && isBloodMoon ? { animation: "flicker 1.5s infinite" } : {}),
           }} />
         ))}
       </div>
@@ -237,28 +271,14 @@ function DayNightWidget() {
   );
 }
 
-function Minimap({ compassDeg }) {
-  // Generate a static-ish set of dots; mob dots drift slightly
+function Minimap({ compassDeg, mobBlips = [] }) {
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     const i = setInterval(() => setTick(t => t + 1), 700);
     return () => clearInterval(i);
   }, []);
 
-  const mobs = [
-    { angle: 35,  dist: 0.65, kind: "T" }, // Troll
-    { angle: 110, dist: 0.45, kind: "B" }, // Brute
-    { angle: 200, dist: 0.85, kind: "H" }, // Husk
-    { angle: 285, dist: 0.55, kind: "T" },
-    { angle: 320, dist: 0.30, kind: "F" }, // Fleshball
-  ];
-
-  const blocks = [
-    { angle: 60, dist: 0.2 },
-    { angle: 80, dist: 0.25 },
-    { angle: 75, dist: 0.32 },
-    { angle: 250, dist: 0.4 },
-  ];
+  const blocks = [];
 
   const r = 95;
   const dotPos = (angle, dist) => {
@@ -338,9 +358,9 @@ function Minimap({ compassDeg }) {
           );
         })}
 
-        {/* mobs (red blips) */}
-        {mobs.map((m, i) => {
-          const p = dotPos(m.angle + tick * 4, m.dist);
+        {/* mobs (real blips from bridge) */}
+        {mobBlips.map((m, i) => {
+          const p = dotPos(m.angle, m.dist);
           return (
             <div key={"m" + i} style={{
               position: "absolute", left: p.left - 4, top: p.top - 4,
@@ -377,7 +397,7 @@ function Minimap({ compassDeg }) {
       </div>
 
       <div className="mono dim" style={{ fontSize: 9, letterSpacing: "0.18em", marginTop: 6, textAlign: "center" }}>
-        ░ RADAR / 64m / 5 HOSTILES ░
+        ░ RADAR / 64m / {mobBlips.length} HOSTILE{mobBlips.length !== 1 ? "S" : ""} ░
       </div>
     </div>
   );

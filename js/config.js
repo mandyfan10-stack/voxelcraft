@@ -41,3 +41,21 @@ export const COMBAT_COOLDOWN    = 5;
 export const HORDE_INTERVAL    = 90;
 export const MAX_MOBS          = 8;
 export const NIGHT_SPEED_MULT  = 1.8;
+
+// Sprint / Stamina
+export const SPRINT_SPEED_MULT    = 1.75;
+export const STAMINA_MAX          = 100;
+export const STAMINA_SPRINT_DRAIN = 30;   // per sec
+export const STAMINA_REGEN_RATE   = 12;   // per sec
+export const STAMINA_REGEN_DELAY  = 1.5;  // sec before regen starts
+
+// Hunger
+export const HUNGER_MAX           = 100;
+export const HUNGER_DRAIN_RATE    = 1.0;  // per sec
+export const HUNGER_STARVATION_DMG = 5;   // HP/sec when hunger = 0
+
+// Combat
+export const MOB_MAX_HP           = 60;
+export const MELEE_RANGE          = 2.8;
+export const MELEE_DAMAGE         = 35;
+export const MELEE_COOLDOWN       = 0.55; // sec between swings
