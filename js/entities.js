@@ -363,17 +363,7 @@ function triggerDeath() {
   if (player.dead) return;
   player.dead = true;
   if (document.pointerLockElement) document.exitPointerLock();
-
-  const skull = document.getElementById('skull');
-  const emoji = document.getElementById('skullemoji');
-  if (skull) { skull.style.display = 'flex'; skull.style.background = 'rgba(0,0,0,0.8)'; }
-  if (emoji) {
-    requestAnimationFrame(() => {
-      emoji.style.fontSize = '300px';
-      emoji.style.animation = 'skullpulse 0.5s infinite';
-    });
-  }
-  setTimeout(resetGame, 3500);
+  window.GameBridge?.emit('death');
 }
 
 // ── Mob update ───────────────────────────────────────────────────────────────

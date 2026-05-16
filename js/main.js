@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt } from './world.js';
-import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY } from './entities.js';
+import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY, resetGame } from './entities.js';
 import { cycle, updateCycle, getAtmosphere, getSunDirection } from './daynight.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
@@ -53,14 +53,22 @@ window.addEventListener('blur', () => {
   wish.set(0, 0, 0);
 });
 
+// ── Game bridge ───────────────────────────────────────────────────────────────
+
+let gameActive = false;
+
+window.GameBridge.on('start', () => { gameActive = true; });
+window.GameBridge.on('respawn', () => {
+  resetGame();
+  gameActive = true;
+});
+
 const cvs = document.getElementById('c');
-cvs.addEventListener('click', () => { if (!player.dead) cvs.requestPointerLock(); });
+cvs.addEventListener('click', () => { if (!player.dead && gameActive) cvs.requestPointerLock(); });
 
 cvs.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
-  const hud = document.getElementById('hud');
-  hud.textContent = 'WebGL context lost. Please reload the page.';
-  hud.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:18px;background:rgba(0,0,0,.8);padding:20px;border-radius:8px;z-index:999;';
+  alert('WebGL context lost. Please reload the page.');
 }, false);
 cvs.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
 
@@ -189,38 +197,33 @@ function updateAtmosphere() {
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
 
-const hudEl        = document.getElementById('hud');
-const hpFill       = document.getElementById('hp-fill');
-const hpText       = document.getElementById('hp-text');
-const dayCounter   = document.getElementById('day-counter');
-const vignetteEl   = document.getElementById('vignette');
+let _bridgeTickAcc = 0;
+const BRIDGE_TICK = 1 / 10; // push state at 10 Hz, not every frame
 
 function updateHUD() {
-  hudEl.textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)}`;
+  _bridgeTickAcc += FIXED_DT;
+  if (_bridgeTickAcc < BRIDGE_TICK) return;
+  _bridgeTickAcc = 0;
 
-  const pct = Math.max(0, Math.min(100, player.hp));
-  hpFill.style.width = pct + '%';
-  hpFill.style.background = pct < 30 ? '#cc2200' : pct < 60 ? '#cc8800' : '#44aa22';
-  hpText.textContent = Math.ceil(player.hp);
-
-  const phase = cycle.isNight ? 'NIGHT' : 'DAY';
-  dayCounter.textContent = `${phase} ${cycle.dayCount}`;
-  dayCounter.style.color = cycle.isNight ? '#cc4444' : '#bbdd88';
-
-  if (player.hp < 30 && !player.dead) {
-    const intensity = 1.0 - player.hp / 30;
-    vignetteEl.style.display = 'block';
-    vignetteEl.style.opacity = (0.3 + intensity * 0.7).toFixed(2);
-  } else {
-    vignetteEl.style.display = 'none';
-  }
+  window.GameBridge.setState({
+    hp:          Math.max(0, player.hp),
+    maxHp:       100,
+    dayCount:    cycle.dayCount,
+    isNight:     cycle.isNight,
+    timeFrac:    cycle.frac,
+    posX:        Math.round(player.pos.x),
+    posY:        Math.round(player.pos.y),
+    posZ:        Math.round(player.pos.z),
+    hordeActive: cycle.isNight,
+  });
 }
 
 // ── Game update ───────────────────────────────────────────────────────────────
 
 function update(dt) {
+  updateAtmosphere(); // atmosphere always updates (world visible behind menu)
+  if (!gameActive) return;
   updateCycle(dt, () => spawnHordeMob(scene));
-  updateAtmosphere();
   updateHUD();
 
   wish.set(0, 0, 0);

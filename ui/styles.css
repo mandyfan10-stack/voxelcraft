@@ -1,0 +1,348 @@
+/* VoxelFear — shared distress / CRT / type system */
+
+:root {
+  --bone: #d8d2c4;
+  --bone-dim: #8a8473;
+  --rust: #6b3b1f;
+  --rust-deep: #3d2110;
+  --olive: #4a6b2a;
+  --olive-deep: #2a3d18;
+  --blood: #cc2200;
+  --blood-deep: #6b1100;
+  --cyan: #00ffff;
+  --cyan-dim: #008a8a;
+  --ink: #0a0908;
+  --ink-2: #14110d;
+  --ink-3: #1c1814;
+  --steel: #2b2823;
+  --steel-2: #3a3630;
+
+  --mono: "IBM Plex Mono", "JetBrains Mono", "Courier New", monospace;
+  --display: "Oswald", "Anton", "Impact", "Helvetica Neue", sans-serif;
+
+  /* tweakable */
+  --distress: 1;
+  --bloodlevel: 0.7;
+  --cyanlevel: 0.6;
+  --scanlines: 0.5;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--ink); color: var(--bone); font-family: var(--mono); overflow: hidden; height: 100%; }
+
+#root { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+
+/* ── Distress / CRT global overlay ─────────────────────────────────── */
+.crt {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9000;
+  mix-blend-mode: multiply;
+}
+.crt::before {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,calc(0.35 * var(--scanlines))) 2px,
+    rgba(0,0,0,calc(0.35 * var(--scanlines))) 3px
+  );
+}
+.crt::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+}
+
+.vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background:
+    radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%),
+    radial-gradient(ellipse at center, rgba(204,34,0, calc(0.04 * var(--bloodlevel))) 0%, transparent 60%);
+}
+
+.noise {
+  position: fixed; inset: 0; pointer-events: none; z-index: 40;
+  opacity: calc(0.12 * var(--distress));
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: noiseShift 1.4s steps(4) infinite;
+}
+@keyframes noiseShift {
+  0% { transform: translate(0,0); }
+  25% { transform: translate(-3px,2px); }
+  50% { transform: translate(2px,-2px); }
+  75% { transform: translate(-1px,1px); }
+  100% { transform: translate(0,0); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  41% { opacity: 1; }
+  42% { opacity: 0.82; }
+  43% { opacity: 1; }
+  88% { opacity: 1; }
+  89% { opacity: 0.6; }
+  90% { opacity: 1; }
+}
+.flicker { animation: flicker 6s infinite; }
+
+@keyframes glitchX {
+  0%, 92%, 100% { transform: translate(0,0); }
+  93% { transform: translate(-2px, 0); }
+  94% { transform: translate(2px, 0); }
+  95% { transform: translate(-1px, 0); }
+}
+
+/* ── Type system ──────────────────────────────────────────────────── */
+.mono { font-family: var(--mono); }
+.display {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bone-dim);
+}
+
+/* Distressed text: dual-shadow + slight clip to break legibility a hair */
+.distressed {
+  position: relative;
+  text-shadow:
+    1px 0 0 rgba(204,34,0, calc(0.5 * var(--bloodlevel))),
+    -1px 0 0 rgba(0,255,255, calc(0.3 * var(--cyanlevel))),
+    0 0 18px rgba(204,34,0, calc(0.25 * var(--bloodlevel)));
+}
+.distressed::after {
+  content: attr(data-text);
+  position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  opacity: calc(0.4 * var(--distress));
+  background: linear-gradient(
+    to bottom,
+    transparent 0%, transparent 48%,
+    rgba(0,0,0,0.4) 49%, transparent 51%,
+    transparent 100%
+  );
+  background-size: 100% 6px;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* ── Panels / Chrome ──────────────────────────────────────────────── */
+.panel {
+  background:
+    linear-gradient(180deg, rgba(20,17,13,0.92), rgba(10,9,8,0.96));
+  border: 1px solid var(--steel-2);
+  box-shadow:
+    inset 0 1px 0 rgba(216,210,196,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.8),
+    0 0 0 1px rgba(0,0,0,0.5),
+    0 8px 32px rgba(0,0,0,0.7);
+  position: relative;
+}
+.panel.metal {
+  background:
+    linear-gradient(180deg, #2b2823 0%, #1c1814 50%, #14110d 100%);
+}
+.panel.metal::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle at 8px 8px, rgba(0,0,0,0.6) 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 8px) 8px, rgba(0,0,0,0.6) 1.5px, transparent 2px),
+    radial-gradient(circle at 8px calc(100% - 8px), rgba(0,0,0,0.6) 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), rgba(0,0,0,0.6) 1.5px, transparent 2px);
+}
+.panel.metal::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0, transparent 4px,
+      rgba(0,0,0, calc(0.04 * var(--distress))) 4px,
+      rgba(0,0,0, calc(0.04 * var(--distress))) 5px
+    );
+  mix-blend-mode: multiply;
+}
+
+.rivet {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #4a4640 0%, #1c1814 60%, #0a0908 100%);
+  box-shadow: 0 1px 0 rgba(216,210,196,0.06), inset 0 -1px 0 rgba(0,0,0,0.8);
+  position: absolute;
+}
+
+/* Stenciled labels — for inventory etc */
+.stencil {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--bone-dim);
+  text-transform: uppercase;
+  text-shadow: 0 0 0 transparent;
+  /* faded stencil look */
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.85) 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,1) 0 6px, rgba(0,0,0,0.3) 6px 7px);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.85) 100%);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+.btn {
+  appearance: none; border: none;
+  font-family: var(--display);
+  font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase;
+  background: linear-gradient(180deg, #2b2823 0%, #14110d 100%);
+  color: var(--bone);
+  border: 1px solid var(--steel-2);
+  padding: 14px 28px;
+  font-size: 16px;
+  cursor: crosshair;
+  position: relative;
+  transition: all 0.08s linear;
+  box-shadow:
+    inset 0 1px 0 rgba(216,210,196,0.1),
+    inset 0 -1px 0 rgba(0,0,0,0.8);
+}
+.btn:hover {
+  background: linear-gradient(180deg, #3a3630 0%, #1c1814 100%);
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0,255,255, calc(0.7 * var(--cyanlevel)));
+  border-color: rgba(0,255,255, calc(0.4 * var(--cyanlevel)));
+}
+.btn:active { transform: translateY(1px); }
+.btn.danger {
+  border-color: var(--blood-deep);
+  color: var(--blood);
+}
+.btn.danger:hover {
+  background: linear-gradient(180deg, #4d1808 0%, #1c1814 100%);
+  color: #ff4422;
+  text-shadow: 0 0 12px rgba(204,34,0,0.8);
+  border-color: var(--blood);
+}
+.btn.primary {
+  border-color: rgba(204,34,0,0.5);
+  color: var(--bone);
+  background: linear-gradient(180deg, #3d1810 0%, #1c0a06 100%);
+}
+.btn.primary:hover {
+  background: linear-gradient(180deg, #6b1f10 0%, #2d0a00 100%);
+  color: #fff;
+  border-color: var(--blood);
+  box-shadow:
+    inset 0 1px 0 rgba(216,210,196,0.1),
+    inset 0 -1px 0 rgba(0,0,0,0.8),
+    0 0 24px rgba(204,34,0,0.4);
+}
+
+/* ── Bars / Gauges ───────────────────────────────────────────────── */
+.bar {
+  height: 14px;
+  background: #14110d;
+  border: 1px solid var(--steel-2);
+  position: relative;
+  overflow: hidden;
+}
+.bar > .fill {
+  height: 100%;
+  background: linear-gradient(180deg, #ff4422 0%, var(--blood) 50%, var(--blood-deep) 100%);
+  position: relative;
+  transition: width 0.3s ease-out;
+}
+.bar > .fill::after {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0,0,0,0) 0, rgba(0,0,0,0) 6px,
+    rgba(0,0,0,0.35) 6px, rgba(0,0,0,0.35) 7px
+  );
+}
+.bar.stamina > .fill {
+  background: linear-gradient(180deg, #ffcc33 0%, #cc8800 50%, #6b4400 100%);
+}
+.bar.hunger > .fill {
+  background: linear-gradient(180deg, #88aa44 0%, var(--olive) 50%, var(--olive-deep) 100%);
+}
+
+/* ── Glitch text ──────────────────────────────────────────────────── */
+.glitch {
+  position: relative;
+  display: inline-block;
+}
+.glitch[data-text]::before,
+.glitch[data-text]::after {
+  content: attr(data-text);
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: 100%;
+  opacity: calc(0.6 * var(--distress));
+}
+.glitch[data-text]::before {
+  color: var(--blood);
+  transform: translate(-1px, 0);
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+  mix-blend-mode: screen;
+}
+.glitch[data-text]::after {
+  color: var(--cyan);
+  transform: translate(1px, 0);
+  clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+  mix-blend-mode: screen;
+  opacity: calc(0.5 * var(--cyanlevel) * var(--distress));
+}
+
+/* ── Blood splatter (svg masked) ──────────────────────────────────── */
+.splatter {
+  position: absolute; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><g fill='%23cc2200'><circle cx='40' cy='50' r='3'/><circle cx='60' cy='45' r='1.5'/><circle cx='80' cy='55' r='5'/><circle cx='100' cy='40' r='2'/><circle cx='75' cy='75' r='8'/><circle cx='110' cy='80' r='2.5'/><circle cx='130' cy='65' r='1'/><circle cx='95' cy='100' r='12'/><circle cx='120' cy='110' r='4'/><circle cx='140' cy='95' r='2'/><circle cx='85' cy='130' r='3'/><circle cx='105' cy='145' r='1.5'/><circle cx='125' cy='130' r='5'/><circle cx='65' cy='115' r='2'/><circle cx='160' cy='75' r='1.5'/><circle cx='30' cy='90' r='2'/><path d='M 95 100 Q 100 90 95 85 Q 90 80 100 75'/><path d='M 75 75 Q 70 60 80 55'/></g></svg>");
+  background-size: contain; background-repeat: no-repeat;
+  opacity: calc(0.7 * var(--bloodlevel));
+  mix-blend-mode: screen;
+}
+
+/* ── Cursors / dim ───────────────────────────────────────────────── */
+.dim { color: var(--bone-dim); }
+.cyan { color: var(--cyan); text-shadow: 0 0 6px rgba(0,255,255, calc(0.6 * var(--cyanlevel))); }
+.blood { color: var(--blood); text-shadow: 0 0 6px rgba(204,34,0, calc(0.5 * var(--bloodlevel))); }
+
+/* ── ASCII / divider ──────────────────────────────────────────────── */
+.div-ascii {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--bone-dim);
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ── Voxel block icon helpers (CSS isometric cube) ─────────────────── */
+.vcube {
+  display: inline-block;
+  width: 44px; height: 44px;
+  position: relative;
+  transform-style: preserve-3d;
+}
+.vcube .face {
+  position: absolute; inset: 0;
+}
+
+/* hotkey chip */
+.kbd {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--steel-2);
+  background: var(--ink-2);
+  color: var(--bone-dim);
+  border-radius: 2px;
+  margin: 0 2px;
+}
+
+/* selectable border */
+.selected-outline {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+  box-shadow: 0 0 16px rgba(0,255,255, calc(0.7 * var(--cyanlevel)));
+}
