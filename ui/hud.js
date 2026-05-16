@@ -233,11 +233,7 @@ function HUD({
     className: "kbd"
   }, "I"), " INVENTORY   ", /*#__PURE__*/React.createElement("span", {
     className: "kbd"
-  }, "ESC"), " PAUSE   ", /*#__PURE__*/React.createElement("span", {
-    className: "kbd"
-  }, "M"), " MINIMAP   ", /*#__PURE__*/React.createElement("span", {
-    className: "kbd"
-  }, "\\"), " DIE (DEBUG)")), /*#__PURE__*/React.createElement("div", {
+  }, "ESC"), " PAUSE")), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       right: 24,

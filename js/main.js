@@ -54,17 +54,17 @@ window.addEventListener('blur', () => {
 });
 
 // ── Game bridge ───────────────────────────────────────────────────────────────
+// The React menu mounts instantly, but this module is large (Three.js ~2 MB)
+// and deferred — it may finish loading AFTER the player clicks "Start". So the
+// "started" flag is read as latched state on GameBridge, never a one-shot event:
+// an early click can't be missed.
 
-let gameActive = false;
-
-window.GameBridge.on('start', () => { gameActive = true; });
-window.GameBridge.on('respawn', () => {
-  resetGame();
-  gameActive = true;
-});
+window.GameBridge.on('respawn', () => { resetGame(); });
 
 const cvs = document.getElementById('c');
-cvs.addEventListener('click', () => { if (!player.dead && gameActive) cvs.requestPointerLock(); });
+cvs.addEventListener('click', () => {
+  if (!player.dead && window.GameBridge.state.started) cvs.requestPointerLock();
+});
 
 cvs.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
@@ -222,7 +222,7 @@ function updateHUD() {
 
 function update(dt) {
   updateAtmosphere(); // atmosphere always updates (world visible behind menu)
-  if (!gameActive) return;
+  if (!window.GameBridge.state.started) return;
   updateCycle(dt, () => spawnHordeMob(scene));
   updateHUD();
 
@@ -284,8 +284,10 @@ addEventListener('resize', () => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-player.pos.set(0, groundY(0,0) + 10, 0);
+// Generate the spawn chunks FIRST — groundY() needs real terrain, otherwise it
+// returns the empty-world floor and the player spawns trapped inside the ground.
 updateChunks();
 while (chunkQueue.length > 0) processChunkQueue();
+player.pos.set(0, groundY(0, 0) + 3, 0);
 setTimeout(() => spawnMobs(scene), 60);
 loop();

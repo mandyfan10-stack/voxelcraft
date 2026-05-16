@@ -144,7 +144,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
           <span className="kbd">LMB</span> MINE   <span className="kbd">RMB</span> PLACE   <span className="kbd">SHIFT</span> SPRINT
         </div>
         <div className="mono dim" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
-          <span className="kbd">I</span> INVENTORY   <span className="kbd">ESC</span> PAUSE   <span className="kbd">M</span> MINIMAP   <span className="kbd">\</span> DIE (DEBUG)
+          <span className="kbd">I</span> INVENTORY   <span className="kbd">ESC</span> PAUSE
         </div>
       </div>
 

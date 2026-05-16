@@ -20,6 +20,7 @@ function MainMenu({
     style: {
       position: "absolute",
       inset: 0,
+      pointerEvents: "auto",
       display: "grid",
       gridTemplateColumns: "1fr 480px",
       background: "rgba(5,3,2,0.78)",
