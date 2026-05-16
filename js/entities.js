@@ -190,8 +190,8 @@ export function makeTroll() {
 
   // Stubby legs
   const legGeo = new THREE.CylinderGeometry(0.22, 0.18, 0.55, 7);
-  g.add(Object.assign(mesh(legGeo, M_SHIRT), { position: new THREE.Vector3(-0.38, 0.28, 0.05) }));
-  g.add(Object.assign(mesh(legGeo, M_SHIRT), { position: new THREE.Vector3( 0.38, 0.28, 0.05) }));
+  const legL = mesh(legGeo, M_SHIRT); legL.position.set(-0.38, 0.28, 0.05); g.add(legL);
+  const legR = mesh(legGeo, M_SHIRT); legR.position.set( 0.38, 0.28, 0.05); g.add(legR);
 
   g.userData = { h: 2.5, r: 0.85 };
   return g;
@@ -353,7 +353,8 @@ export function meleeAttack() {
       const dot = (fwx * dx + fwy * dy + fwz * dz) / dist;
       if (dot > 0.45) {
         m.userData.hp -= MELEE_DAMAGE;
-        if (m.userData.hp <= 0) m.userData.dead = true;
+        if (m.userData.hp <= 0) { m.userData.dead = true; window.GameBridge?.emit('kill'); }
+        window.GameBridge?.emit('hit', { dmg: MELEE_DAMAGE, fatal: m.userData.hp <= 0 });
         hit = true;
       }
     }

@@ -94,6 +94,17 @@ html, body { margin: 0; padding: 0; background: var(--ink); color: var(--bone); 
   95% { transform: translate(-1px, 0); }
 }
 
+@keyframes fadeUpOut {
+  0%   { opacity: 1; transform: translate(-50%, -50%); }
+  60%  { opacity: 0.9; transform: translate(-50%, calc(-50% - 18px)); }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 36px)); }
+}
+
+@keyframes vignettePulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
 /* ── Type system ──────────────────────────────────────────────────── */
 .mono { font-family: var(--mono); }
 .display {

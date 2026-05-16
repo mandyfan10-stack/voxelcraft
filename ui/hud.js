@@ -20,10 +20,36 @@ function HUD({
   const [timeFrac, setTimeFrac] = React.useState(0);
   const [mobBlips, setMobBlips] = React.useState([]);
 
+  // Visual effects state
+  const [damageFlash, setDamageFlash] = React.useState(0); // 0-1 intensity
+  const [hitLabel, setHitLabel] = React.useState(null); // {dmg, fatal, key}
+  const [pointerLocked, setPointerLocked] = React.useState(false);
+  const prevHpRef = React.useRef(100);
+
+  // Track pointer lock for crosshair
+  React.useEffect(() => {
+    const onLock = () => setPointerLocked(true);
+    const onUnlock = () => setPointerLocked(false);
+    document.addEventListener('pointerlockchange', onLock);
+    document.addEventListener('pointerlockchange', onUnlock);
+    // Check immediately
+    const check = () => setPointerLocked(!!document.pointerLockElement);
+    document.addEventListener('pointerlockchange', check);
+    return () => document.removeEventListener('pointerlockchange', check);
+  }, []);
+
   // Sync ALL real game state from bridge
   React.useEffect(() => {
     const handler = s => {
-      setHp(s.hp ?? 100);
+      const newHp = s.hp ?? 100;
+      if (newHp < prevHpRef.current) {
+        // Damage taken — flash
+        const intensity = Math.min(1, (prevHpRef.current - newHp) / 30);
+        setDamageFlash(intensity);
+        setTimeout(() => setDamageFlash(0), 350);
+      }
+      prevHpRef.current = newHp;
+      setHp(newHp);
       setStamina(s.stamina ?? 100);
       setHunger(s.hunger ?? 100);
       setPosX(s.posX ?? 0);
@@ -33,11 +59,26 @@ function HUD({
       setIsNight(!!s.isNight);
       setTimeFrac(s.timeFrac ?? 0);
       setMobBlips(s.mobBlips ?? []);
-      // Compass follows player yaw — bridge sends posX/posZ so we derive from yaw via timeFrac drift
-      // Real yaw not yet on bridge — use small animation
     };
     window.GameBridge.on('state', handler);
     return () => window.GameBridge.off('state', handler);
+  }, []);
+
+  // Hit / kill events
+  React.useEffect(() => {
+    const onHit = ({
+      dmg,
+      fatal
+    }) => {
+      setHitLabel({
+        dmg,
+        fatal,
+        key: Date.now()
+      });
+      setTimeout(() => setHitLabel(null), fatal ? 700 : 400);
+    };
+    window.GameBridge.on('hit', onHit);
+    return () => window.GameBridge.off('hit', onHit);
   }, []);
 
   // Compass wander (subtle — real yaw not on bridge yet)
@@ -271,7 +312,115 @@ function HUD({
       letterSpacing: "0.2em",
       marginTop: 2
     }
-  }, "\u2591 ", timeFracToPhase(timeFrac), " \u2591 ", mobBlips.length, " HOSTILE", mobBlips.length !== 1 ? "S" : "", " \u2591")));
+  }, "\u2591 ", timeFracToPhase(timeFrac), " \u2591 ", mobBlips.length, " HOSTILE", mobBlips.length !== 1 ? "S" : "", " \u2591")), pointerLocked && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: "50%",
+      top: "50%",
+      transform: "translate(-50%, -50%)",
+      pointerEvents: "none"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: -10,
+      top: -1,
+      width: 7,
+      height: 2,
+      background: "rgba(255,255,255,0.9)",
+      boxShadow: "0 0 3px rgba(0,0,0,0.8)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      right: -10,
+      top: -1,
+      width: 7,
+      height: 2,
+      background: "rgba(255,255,255,0.9)",
+      boxShadow: "0 0 3px rgba(0,0,0,0.8)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: -1,
+      top: -10,
+      width: 2,
+      height: 7,
+      background: "rgba(255,255,255,0.9)",
+      boxShadow: "0 0 3px rgba(0,0,0,0.8)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: -1,
+      bottom: -10,
+      width: 2,
+      height: 7,
+      background: "rgba(255,255,255,0.9)",
+      boxShadow: "0 0 3px rgba(0,0,0,0.8)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: -1.5,
+      top: -1.5,
+      width: 3,
+      height: 3,
+      borderRadius: "50%",
+      background: "rgba(255,255,255,0.95)"
+    }
+  })), damageFlash > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      pointerEvents: "none",
+      background: `radial-gradient(ellipse at center, rgba(180,0,0,${damageFlash * 0.55}) 0%, rgba(120,0,0,${damageFlash * 0.8}) 100%)`,
+      zIndex: 800
+    }
+  }), hp < 40 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      pointerEvents: "none",
+      background: "radial-gradient(ellipse at center, transparent 38%, rgba(140,0,0,0.45) 72%, rgba(180,0,0,0.75) 100%)",
+      animation: "vignettePulse 1.2s ease-in-out infinite",
+      zIndex: 799,
+      opacity: 0.4 + (1 - hp / 40) * 0.6
+    }
+  }), hitLabel && /*#__PURE__*/React.createElement("div", {
+    key: hitLabel.key,
+    style: {
+      position: "absolute",
+      left: "50%",
+      top: "42%",
+      transform: "translate(-50%, -50%)",
+      pointerEvents: "none",
+      fontFamily: "var(--display)",
+      fontWeight: 900,
+      fontSize: hitLabel.fatal ? 32 : 22,
+      letterSpacing: "0.08em",
+      color: hitLabel.fatal ? "var(--blood)" : "#ffcc44",
+      textShadow: hitLabel.fatal ? "0 0 20px rgba(204,34,0,0.9), 2px 0 0 rgba(0,0,0,0.8)" : "0 0 12px rgba(255,180,0,0.7), 1px 1px 0 rgba(0,0,0,0.9)",
+      animation: "fadeUpOut 0.5s ease-out forwards",
+      zIndex: 810
+    }
+  }, hitLabel.fatal ? "☠ KILL" : `-${hitLabel.dmg}`), hunger <= 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: "50%",
+      top: "35%",
+      transform: "translateX(-50%)",
+      pointerEvents: "none",
+      fontFamily: "var(--mono)",
+      fontSize: 12,
+      letterSpacing: "0.25em",
+      color: "#cc6600",
+      textShadow: "0 0 8px rgba(204,100,0,0.7)",
+      animation: "flicker 1s infinite",
+      zIndex: 805
+    }
+  }, "\u2591 STARVATION DAMAGE \u2591"));
 }
 function VitalsRow({
   label,

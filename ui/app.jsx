@@ -43,6 +43,13 @@ function App() {
     setScreen("hud");
   }
 
+  // Exit pointer lock when leaving the "hud" screen (inventory, settings, etc.)
+  React.useEffect(() => {
+    if (screen !== "hud" && screen !== "menu" && screen !== "death") {
+      if (document.pointerLockElement) document.exitPointerLock();
+    }
+  }, [screen]);
+
   // Keyboard: I = inventory, ESC = pause / resume
   React.useEffect(() => {
     const handler = (e) => {
