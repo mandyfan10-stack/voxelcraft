@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { CHUNK, P } from './config.js';
-import { worldData, chunkMeshes, dirtyChunks, ckey, genChunk, makeChunkMesh, sbw } from './world.js';
-import { player, raycast, col, spawnMobs, updateMobs, groundY } from './entities.js';
+import { CHUNK_SIZE, PLAYER_CONFIG } from './config.js';
+import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt } from './world.js';
+import { player, raycast, checkCollision, spawnMobs, updateMobs, groundY } from './entities.js';
 
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.4));
@@ -29,6 +29,12 @@ addEventListener('keyup', e => {
   if (c === 'KeyW') keys.w = 0; else if (c === 'KeyA') keys.a = 0; else if (c === 'KeyS') keys.s = 0; else if (c === 'KeyD') keys.d = 0; else if (c === 'Space') keys.j = 0;
 });
 
+// Защита от бесконечного бега при Alt+Tab/смене окон
+window.addEventListener('blur', () => {
+  keys.w = 0; keys.a = 0; keys.s = 0; keys.d = 0; keys.j = 0;
+  wish.set(0, 0, 0);
+});
+
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => { if (!player.dead) cvs.requestPointerLock(); });
 document.addEventListener('pointerlockchange', () => locked = document.pointerLockElement === cvs);
@@ -43,56 +49,55 @@ document.addEventListener('mousemove', e => {
 
 cvs.addEventListener('mousedown', e => {
   if (!locked || player.dead) return;
-  if (e.button === 0) { const r = raycast(camera); if (r) sbw(...r.hit, 0); }
-  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) sbw(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
+  if (e.button === 0) { const r = raycast(camera); if (r) setBlockAt(...r.hit, 0); }
+  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) setBlockAt(...r.prev, [1, 2, 3, 4, 5, 9][selIdx]); }
 });
 
-// Глобальные переменные для пулинга (защита от мусора GC)
 const tPos = new THREE.Vector3();
 const tStep = new THREE.Vector3();
 const wish = new THREE.Vector3();
 const fw = new THREE.Vector3();
 const rt = new THREE.Vector3();
 
-function mvAxis(a, amt) {
+function movePlayerAxis(a, amt) {
   if (!amt) return;
   const s = Math.sign(amt); let rem = amt;
   while (Math.abs(rem) > 1e-4) {
     const d = Math.min(Math.abs(rem), .05) * s; 
     tPos.copy(player.pos); tPos[a] += d;
-    if (!col(tPos)) { player.pos.copy(tPos); rem -= d; continue; }
+    if (!checkCollision(tPos)) { player.pos.copy(tPos); rem -= d; continue; }
     
     if (a !== 'y' && player.onG) { 
       tStep.copy(tPos); tStep.y += 1.02; 
-      if (!col(tStep)) { player.pos.copy(tStep); rem -= d; continue; } 
+      if (!checkCollision(tStep)) { player.pos.copy(tStep); rem -= d; continue; } 
     }
     player.vel[a] = 0; break;
   }
 }
 
-function mvY(amt) {
+function movePlayerY(amt) {
   if (!amt) return;
   const s = Math.sign(amt); let rem = amt; player.onG = false;
   while (Math.abs(rem) > 1e-4) {
     const d = Math.min(Math.abs(rem), .05) * s; 
     tPos.copy(player.pos); tPos.y += d;
-    if (!col(tPos)) { player.pos.copy(tPos); rem -= d; continue; } 
+    if (!checkCollision(tPos)) { player.pos.copy(tPos); rem -= d; continue; } 
     if (s < 0) player.onG = true; 
     player.vel.y = 0; break;
   }
 }
 
-const RDIST = 4;
-let lastCU = 0;
+const RENDERING_DISTANCE = 4;
+let lastChunkUpdate = 0;
 const chunkQueue = [];
 
 function updateChunks() {
-  const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
+  const pcx = Math.floor(player.pos.x / CHUNK_SIZE), pcz = Math.floor(player.pos.z / CHUNK_SIZE);
   
-  for (let dx = -RDIST; dx <= RDIST; dx++) {
-    for (let dz = -RDIST; dz <= RDIST; dz++) {
+  for (let dx = -RENDERING_DISTANCE; dx <= RENDERING_DISTANCE; dx++) {
+    for (let dz = -RENDERING_DISTANCE; dz <= RENDERING_DISTANCE; dz++) {
       const cx = pcx + dx, cz = pcz + dz;
-      const key = ckey(cx, cz);
+      const key = getChunkKey(cx, cz);
       if (!worldData.has(key) || !chunkMeshes.has(key)) {
         if (!chunkQueue.find(c => c.cx === cx && c.cz === cz)) {
           chunkQueue.push({cx, cz});
@@ -101,16 +106,15 @@ function updateChunks() {
     }
   }
 
-  // Сортировка очереди: ближние чанки генерируются первыми
   chunkQueue.sort((a, b) => {
     return (Math.pow(a.cx - pcx, 2) + Math.pow(a.cz - pcz, 2)) - 
            (Math.pow(b.cx - pcx, 2) + Math.pow(b.cz - pcz, 2));
   });
 
-  // УСТРАНЕНИЕ УТЕЧКИ ПАМЯТИ: Полное удаление старых данных и мешей
   for (const k of chunkMeshes.keys()) {
-    const cx = (k >> 16), cz = (k << 16) >> 16;
-    if (Math.abs(cx - pcx) > RDIST + 1 || Math.abs(cz - pcz) > RDIST + 1) {
+    const cx = Math.floor(k / 16777216) - 8388608;
+    const cz = (k % 16777216) - 8388608;
+    if (Math.abs(cx - pcx) > RENDERING_DISTANCE + 1 || Math.abs(cz - pcz) > RENDERING_DISTANCE + 1) {
       const m = chunkMeshes.get(k); 
       scene.remove(m); 
       m.geometry.dispose(); 
@@ -121,18 +125,18 @@ function updateChunks() {
   }
   
   for (const k of dirtyChunks) { 
-    const cx = (k >> 16), cz = (k << 16) >> 16; 
+    const cx = Math.floor(k / 16777216) - 8388608;
+    const cz = (k % 16777216) - 8388608;
     makeChunkMesh(cx, cz, scene); 
   }
   dirtyChunks.clear();
 }
 
 function processChunkQueue() {
-  // Амортизация: обрабатываем только 1 чанк за кадр (Time Slicing)
   if (chunkQueue.length > 0) {
     const {cx, cz} = chunkQueue.shift();
     genChunk(cx, cz);
-    if (!chunkMeshes.has(ckey(cx, cz))) makeChunkMesh(cx, cz, scene);
+    if (!chunkMeshes.has(getChunkKey(cx, cz))) makeChunkMesh(cx, cz, scene);
   }
 }
 
@@ -150,31 +154,31 @@ function update(dt) {
     wish.copy(fw).multiplyScalar(iz);
     wish.addScaledVector(rt, ix);
 
-    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(P.spd * Math.min(len, 1));
-    if (player.onG && keys.j) { player.vel.y = P.jmp; player.onG = false; }
+    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(PLAYER_CONFIG.speed * Math.min(len, 1));
+    if (player.onG && keys.j) { player.vel.y = PLAYER_CONFIG.jumpForce; player.onG = false; }
   }
 
-  const ac = player.onG ? P.acc : P.aac;
+  const ac = player.onG ? PLAYER_CONFIG.accelerationGround : PLAYER_CONFIG.accelerationAir;
   player.vel.x += (wish.x - player.vel.x) * Math.min(1, ac * dt);
   player.vel.z += (wish.z - player.vel.z) * Math.min(1, ac * dt);
   
-  player.vel.y = Math.max(-28, player.vel.y - P.grav * dt);
+  player.vel.y = Math.max(-28, player.vel.y - PLAYER_CONFIG.gravity * dt);
   
-  mvAxis('x', player.vel.x * dt); 
-  mvAxis('z', player.vel.z * dt); 
-  mvY(player.vel.y * dt);
+  movePlayerAxis('x', player.vel.x * dt); 
+  movePlayerAxis('z', player.vel.z * dt); 
+  movePlayerY(player.vel.y * dt);
   
   if (player.pos.y < -10) { player.pos.set(0, groundY(0,0) + 15, 0); }
   
-  camera.position.set(player.pos.x, player.pos.y + P.eye, player.pos.z);
+  camera.position.set(player.pos.x, player.pos.y + PLAYER_CONFIG.eyeHeight, player.pos.z);
   camera.rotation.order = 'YXZ'; camera.rotation.y = player.yaw; camera.rotation.x = player.pitch;
   
   updateMobs(dt);
   
-  lastCU += dt; 
-  if (lastCU > .2) { 
+  lastChunkUpdate += dt; 
+  if (lastChunkUpdate > .2) { 
     updateChunks(); 
-    lastCU = 0; 
+    lastChunkUpdate = 0; 
   }
   
   document.getElementById('hud').textContent = `x:${Math.round(player.pos.x)} y:${Math.round(player.pos.y)} z:${Math.round(player.pos.z)} | Dead: ${player.dead}`;
@@ -187,11 +191,9 @@ let accumulator = 0;
 function loop() {
   requestAnimationFrame(loop);
   
-  // Защита от спирали смерти (когда вкладка браузера неактивна)
   let frameTime = Math.min(0.25, clock.getDelta());
   accumulator += frameTime;
 
-  // Физика на фиксированном шаге (исключает пролет сквозь стены при лагах)
   while (accumulator >= FIXED_DT) {
     update(FIXED_DT);
     accumulator -= FIXED_DT;
@@ -205,7 +207,6 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 
 player.pos.set(0, groundY(0,0) + 10, 0);
 updateChunks();
-// Синхронно генерируем первичные чанки под ногами, чтобы не провалиться
 while(chunkQueue.length > 0) processChunkQueue();
 
 setTimeout(() => spawnMobs(scene), 60);
