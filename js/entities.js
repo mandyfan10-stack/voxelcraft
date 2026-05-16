@@ -12,9 +12,9 @@ export const player = {
   hp: PLAYER_MAX_HP,
   stamina: STAMINA_MAX,
   hunger: HUNGER_MAX,
-  lastDamageTime: -999,
-  lastSprintTime: -999,
-  lastMeleeTime:  -999,
+  lastDamageTime:  -999,
+  lastMeleeTime:   -999,
+  _staminaRegenAcc: 0,   // seconds since last sprint — for regen delay
 };
 
 export const mobs = [];
@@ -485,4 +485,7 @@ export function updateMobs(dt) {
   if (!inCombat && !player.dead && (gameTime - player.lastDamageTime) > COMBAT_COOLDOWN) {
     player.hp = Math.min(PLAYER_MAX_HP, player.hp + HP_REGEN_RATE * dt);
   }
+
+  // Catch all sources of HP reaching zero (starvation, mobs, etc.)
+  if (!player.dead && player.hp <= 0) { player.hp = 0; triggerDeath(); }
 }

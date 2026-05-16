@@ -26,15 +26,11 @@ function HUD({
   const [pointerLocked, setPointerLocked] = React.useState(false);
   const prevHpRef = React.useRef(100);
 
-  // Track pointer lock for crosshair
+  // Track pointer lock for crosshair — single listener
   React.useEffect(() => {
-    const onLock = () => setPointerLocked(true);
-    const onUnlock = () => setPointerLocked(false);
-    document.addEventListener('pointerlockchange', onLock);
-    document.addEventListener('pointerlockchange', onUnlock);
-    // Check immediately
     const check = () => setPointerLocked(!!document.pointerLockElement);
     document.addEventListener('pointerlockchange', check);
+    check(); // sync initial state
     return () => document.removeEventListener('pointerlockchange', check);
   }, []);
 
@@ -59,6 +55,7 @@ function HUD({
       setIsNight(!!s.isNight);
       setTimeFrac(s.timeFrac ?? 0);
       setMobBlips(s.mobBlips ?? []);
+      if (s.selIdx !== undefined) setSelectedSlot(s.selIdx);
     };
     window.GameBridge.on('state', handler);
     return () => window.GameBridge.off('state', handler);
@@ -88,31 +85,45 @@ function HUD({
     }, 600);
     return () => clearInterval(i);
   }, []);
+
+  // Matches [1,2,3,5,6,4,8,9] block IDs in main.js RMB handler
   const hotbar = [{
     kind: "dirt",
+    label: "DIRT",
     count: 64
   }, {
     kind: "stone",
+    label: "STONE",
     count: 32
   }, {
-    kind: "wood",
+    kind: "stone",
+    label: "CONCRETE",
     count: 18
   }, {
-    kind: "metal",
-    count: 8
-  }, {
     kind: "leaves",
+    label: "GRAVEL",
     count: 24
   }, {
-    kind: "bone",
-    count: 4
+    kind: "leaves",
+    label: "LEAVES",
+    count: 24
+  }, {
+    kind: "wood",
+    label: "WOOD",
+    count: 16
   }, {
     kind: "glass",
-    count: 12
+    label: "SNOW/ASH",
+    count: 8
   }, {
-    kind: "flesh",
-    count: 2
+    kind: "metal",
+    label: "RUBBLE",
+    count: 4
   }];
+  function handleSlotClick(i) {
+    setSelectedSlot(i);
+    window.GameBridge.emit('selectSlot', i);
+  }
   return /*#__PURE__*/React.createElement("div", {
     "data-screen-label": "02 HUD",
     style: {
@@ -206,7 +217,7 @@ function HUD({
       fontSize: 10,
       letterSpacing: "0.2em"
     }
-  }, "\u2591 SLOT ", selectedSlot + 1, " \u2591 ", hotbar[selectedSlot].kind.toUpperCase(), " \u2591 \xD7", hotbar[selectedSlot].count), /*#__PURE__*/React.createElement("div", {
+  }, "\u2591 SLOT ", selectedSlot + 1, " \u2591 ", hotbar[selectedSlot].label, " \u2591 \xD7", hotbar[selectedSlot].count), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 4,
@@ -217,7 +228,7 @@ function HUD({
     }
   }, hotbar.map((slot, i) => /*#__PURE__*/React.createElement("button", {
     key: i,
-    onClick: () => setSelectedSlot(i),
+    onClick: () => handleSlotClick(i),
     style: {
       width: 60,
       height: 60,
@@ -554,14 +565,17 @@ function Minimap({
     return () => clearInterval(i);
   }, []);
   const blocks = [];
-  const r = 95;
-  const dotPos = (angle, dist) => {
-    const a = (angle + compassDeg) * Math.PI / 180;
+  const RAD_R = 95;
+  // mobBlips angles are already player-relative (0 = forward = top of radar)
+  const mobDotPos = (angle, dist) => {
+    const a = angle * Math.PI / 180;
     return {
-      left: 100 + Math.sin(a) * dist * r,
-      top: 100 - Math.cos(a) * dist * r
+      left: 100 + Math.sin(a) * dist * RAD_R,
+      top: 100 - Math.cos(a) * dist * RAD_R
     };
   };
+  // compass strip uses compassDeg for the heading display only
+  const r = RAD_R;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       width: 220,
@@ -645,21 +659,8 @@ function Minimap({
       transition: "transform 0.7s linear",
       boxShadow: "0 0 8px rgba(0,255,255,0.5)"
     }
-  }), blocks.map((b, i) => {
-    const p = dotPos(b.angle, b.dist);
-    return /*#__PURE__*/React.createElement("div", {
-      key: "b" + i,
-      style: {
-        position: "absolute",
-        left: p.left - 2,
-        top: p.top - 2,
-        width: 4,
-        height: 4,
-        background: "var(--bone-dim)"
-      }
-    });
   }), mobBlips.map((m, i) => {
-    const p = dotPos(m.angle, m.dist);
+    const p = mobDotPos(m.angle, m.dist);
     return /*#__PURE__*/React.createElement("div", {
       key: "m" + i,
       style: {

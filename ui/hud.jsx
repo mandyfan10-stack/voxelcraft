@@ -20,15 +20,11 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
   const [pointerLocked, setPointerLocked] = React.useState(false);
   const prevHpRef = React.useRef(100);
 
-  // Track pointer lock for crosshair
+  // Track pointer lock for crosshair — single listener
   React.useEffect(() => {
-    const onLock   = () => setPointerLocked(true);
-    const onUnlock = () => setPointerLocked(false);
-    document.addEventListener('pointerlockchange', onLock);
-    document.addEventListener('pointerlockchange', onUnlock);
-    // Check immediately
     const check = () => setPointerLocked(!!document.pointerLockElement);
     document.addEventListener('pointerlockchange', check);
+    check(); // sync initial state
     return () => document.removeEventListener('pointerlockchange', check);
   }, []);
 
@@ -53,6 +49,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
       setIsNight(!!s.isNight);
       setTimeFrac(s.timeFrac ?? 0);
       setMobBlips(s.mobBlips ?? []);
+      if (s.selIdx !== undefined) setSelectedSlot(s.selIdx);
     };
     window.GameBridge.on('state', handler);
     return () => window.GameBridge.off('state', handler);
@@ -76,16 +73,22 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
     return () => clearInterval(i);
   }, []);
 
+  // Matches [1,2,3,5,6,4,8,9] block IDs in main.js RMB handler
   const hotbar = [
-    { kind: "dirt", count: 64 },
-    { kind: "stone", count: 32 },
-    { kind: "wood", count: 18 },
-    { kind: "metal", count: 8 },
-    { kind: "leaves", count: 24 },
-    { kind: "bone", count: 4 },
-    { kind: "glass", count: 12 },
-    { kind: "flesh", count: 2 },
+    { kind: "dirt",   label: "DIRT",     count: 64 },
+    { kind: "stone",  label: "STONE",    count: 32 },
+    { kind: "stone",  label: "CONCRETE", count: 18 },
+    { kind: "leaves", label: "GRAVEL",   count: 24 },
+    { kind: "leaves", label: "LEAVES",   count: 24 },
+    { kind: "wood",   label: "WOOD",     count: 16 },
+    { kind: "glass",  label: "SNOW/ASH", count: 8  },
+    { kind: "metal",  label: "RUBBLE",   count: 4  },
   ];
+
+  function handleSlotClick(i) {
+    setSelectedSlot(i);
+    window.GameBridge.emit('selectSlot', i);
+  }
 
   return (
     <div data-screen-label="02 HUD" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -133,7 +136,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
         display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
       }}>
         <div className="mono dim" style={{ fontSize: 10, letterSpacing: "0.2em" }}>
-          ░ SLOT {selectedSlot + 1} ░ {hotbar[selectedSlot].kind.toUpperCase()} ░ ×{hotbar[selectedSlot].count}
+          ░ SLOT {selectedSlot + 1} ░ {hotbar[selectedSlot].label} ░ ×{hotbar[selectedSlot].count}
         </div>
         <div style={{
           display: "flex", gap: 4,
@@ -145,7 +148,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
           {hotbar.map((slot, i) => (
             <button
               key={i}
-              onClick={() => setSelectedSlot(i)}
+              onClick={() => handleSlotClick(i)}
               style={{
                 width: 60, height: 60,
                 background: "rgba(20,17,13,0.9)",
@@ -387,11 +390,14 @@ function Minimap({ compassDeg, mobBlips = [] }) {
 
   const blocks = [];
 
-  const r = 95;
-  const dotPos = (angle, dist) => {
-    const a = ((angle + compassDeg) * Math.PI) / 180;
-    return { left: 100 + Math.sin(a) * dist * r, top: 100 - Math.cos(a) * dist * r };
+  const RAD_R = 95;
+  // mobBlips angles are already player-relative (0 = forward = top of radar)
+  const mobDotPos = (angle, dist) => {
+    const a = (angle * Math.PI) / 180;
+    return { left: 100 + Math.sin(a) * dist * RAD_R, top: 100 - Math.cos(a) * dist * RAD_R };
   };
+  // compass strip uses compassDeg for the heading display only
+  const r = RAD_R;
 
   return (
     <div style={{
@@ -454,20 +460,11 @@ function Minimap({ compassDeg, mobBlips = [] }) {
           boxShadow: "0 0 8px rgba(0,255,255,0.5)",
         }} />
 
-        {/* placed blocks (small grey dots) */}
-        {blocks.map((b, i) => {
-          const p = dotPos(b.angle, b.dist);
-          return (
-            <div key={"b" + i} style={{
-              position: "absolute", left: p.left - 2, top: p.top - 2,
-              width: 4, height: 4, background: "var(--bone-dim)",
-            }} />
-          );
-        })}
+        {/* no static block dots — real mobs only */}
 
-        {/* mobs (real blips from bridge) */}
+        {/* mobs (real blips from bridge, player-relative angles) */}
         {mobBlips.map((m, i) => {
-          const p = dotPos(m.angle, m.dist);
+          const p = mobDotPos(m.angle, m.dist);
           return (
             <div key={"m" + i} style={{
               position: "absolute", left: p.left - 4, top: p.top - 4,

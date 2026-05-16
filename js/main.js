@@ -40,7 +40,7 @@ addEventListener('keydown', e => {
   else if (c === 'KeyD')      keys.d = 1;
   else if (c === 'Space')     keys.j = 1;
   else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
-  else if (e.key >= '1' && e.key <= '6') selIdx = +e.key - 1;
+  else if (e.key >= '1' && e.key <= '8') { selIdx = +e.key - 1; window.GameBridge.setState({ selIdx }); }
 });
 addEventListener('keyup', e => {
   const c = e.code;
@@ -64,6 +64,7 @@ window.addEventListener('blur', () => {
 // an early click can't be missed.
 
 window.GameBridge.on('respawn', () => { resetGame(); });
+window.GameBridge.on('selectSlot', (idx) => { selIdx = Math.max(0, Math.min(7, idx)); });
 
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => {
@@ -95,7 +96,7 @@ cvs.addEventListener('mousedown', e => {
       if (r) setBlockAt(...r.hit, 0);
     }
   }
-  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) setBlockAt(...r.prev, [1,2,3,4,5,9][selIdx]); }
+  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) setBlockAt(...r.prev, [1,2,3,5,6,4,8,9][selIdx] || 1); }
 });
 
 // ── Movement ─────────────────────────────────────────────────────────────────
@@ -228,6 +229,7 @@ function updateHUD() {
     posZ:        Math.round(player.pos.z),
     hordeActive: cycle.isNight,
     mobBlips:    getMobBlips(),
+    selIdx,
   });
 }
 
@@ -255,24 +257,21 @@ function update(dt) {
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(PLAYER_CONFIG.speed * speedMult * Math.min(len, 1));
     if (player.onG && keys.j) { player.vel.y = PLAYER_CONFIG.jumpForce; player.onG = false; }
 
-    // Stamina
+    // Stamina: drain while sprinting, regen after STAMINA_REGEN_DELAY seconds of rest
     if (sprinting) {
       player.stamina = Math.max(0, player.stamina - STAMINA_SPRINT_DRAIN * dt);
-      player.lastSprintTime = 0; // will be set below as we track elapsed
+      player._staminaRegenAcc = 0; // reset regen timer
     } else {
-      if (player._staminaRegenAcc === undefined) player._staminaRegenAcc = 0;
       player._staminaRegenAcc += dt;
-      if (player._staminaRegenAcc > STAMINA_REGEN_DELAY) {
+      if (player._staminaRegenAcc >= STAMINA_REGEN_DELAY) {
         player.stamina = Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN_RATE * dt);
       }
     }
-    if (sprinting) player._staminaRegenAcc = 0;
 
-    // Hunger drain
+    // Hunger drain (starvation damage → triggerDeath caught in updateMobs)
     player.hunger = Math.max(0, player.hunger - HUNGER_DRAIN_RATE * dt);
-    if (player.hunger <= 0) {
-      player.hp -= HUNGER_STARVATION_DMG * dt;
-      if (player.hp <= 0) { player.hp = 0; /* triggerDeath handled in entities */ }
+    if (player.hunger <= 0 && !player.dead) {
+      player.hp = Math.max(0, player.hp - HUNGER_STARVATION_DMG * dt);
     }
   }
 
