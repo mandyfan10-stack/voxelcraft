@@ -2,7 +2,8 @@
   "name": "voxelfear",
   "version": "0.7.3",
   "private": true,
-  "description": "VoxelFear — voxel survival horror game",
+  "type": "module",
+  "description": "VoxelFear — voxel zombie-survival game (7 Days to Die-style)",
   "scripts": {
     "build:ui": "babel ui --out-dir ui --extensions .jsx"
   },

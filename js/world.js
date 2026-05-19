@@ -5,6 +5,10 @@ export const worldData = new Map();
 export const chunkMeshes = new Map();
 export const dirtyChunks = new Set();
 
+// Player-modified voxels, keyed "x,y,z" → blockId. Replayed when a chunk is
+// (re)generated so edits survive chunk unload/reload, and saved to disk.
+export const editedBlocks = new Map();
+
 export const getChunkKey = (cx, cz) => `${cx},${cz}`;
 
 function chunkSeed(cx, cz) {
@@ -54,6 +58,19 @@ export function genChunk(cx, cz) {
       }
     }
   }
+
+  // Replay player edits that fall inside this chunk (in-session + loaded saves).
+  if (editedBlocks.size) {
+    for (const [k, id] of editedBlocks) {
+      const [ex, ey, ez] = k.split(',');
+      const wx = +ex, wy = +ey, wz = +ez;
+      if (wy < 0 || wy >= CHUNK_HEIGHT) continue;
+      if (Math.floor(wx / CHUNK_SIZE) !== cx || Math.floor(wz / CHUNK_SIZE) !== cz) continue;
+      const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+      const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+      arr[getVoxelIndex(lx, wy, lz)] = id;
+    }
+  }
 }
 
 export function getBlockAt(x, y, z) {
@@ -68,6 +85,7 @@ export function setBlockAt(x, y, z, id) {
   const cx = Math.floor(x / CHUNK_SIZE), cz = Math.floor(z / CHUNK_SIZE);
   genChunk(cx, cz);
   worldData.get(getChunkKey(cx, cz))[getVoxelIndex(((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE, y, ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE)] = id;
+  editedBlocks.set(x + ',' + y + ',' + z, id);
   [
     getChunkKey(cx, cz), 
     getChunkKey(cx - 1, cz), 

@@ -59,3 +59,19 @@ export const MOB_MAX_HP           = 60;
 export const MELEE_RANGE          = 2.8;
 export const MELEE_DAMAGE         = 35;
 export const MELEE_COOLDOWN       = 0.55; // sec between swings
+
+// Thirst
+export const THIRST_MAX             = 100;
+export const THIRST_DRAIN_RATE      = 0.7;  // per sec
+export const THIRST_DEHYDRATION_DMG = 4;    // HP/sec when thirst = 0
+
+// Blood moon — every 7th night a large escalating horde besieges the player.
+export const BLOOD_MOON_INTERVAL = 7;   // day count multiple
+export const BLOOD_MOON_PULSE    = 13;  // sec between horde pulses
+export const BLOOD_MOON_PER_PULSE = 3;  // zombies spawned per pulse
+export const BLOOD_MOON_MAX_MOBS = 30;  // mob cap during a blood moon
+
+// Mining — block hardness, indexed by block id (0 = air). Higher = slower to mine.
+// Water (7) is effectively unmineable.
+export const BLOCK_HARDNESS = [0, 1.0, 1.0, 3.2, 1.7, 1.2, 0.5, 999, 1.5, 4.2];
+export const HAND_MINE_SPEED = 1.0;     // base mining speed with no tool

@@ -10,14 +10,25 @@ window.GameBridge = (function () {
     maxHp: 100,
     stamina: 100,
     hunger: 60,
+    thirst: 100,
     dayCount: 1,
     isNight: false,
+    isBloodMoon: false,
     timeFrac: 0,
     posX: 0,
     posY: 64,
     posZ: 0,
     mobCount: 0,
     hordeActive: false,
+    // Inventory / progression — mirrored from the authoritative game-side model.
+    inv: [],
+    selIdx: 0,
+    xp: 0,
+    level: 1,
+    nextLevelXp: 0,
+    itemMeta: {},
+    recipeMeta: [],
+    lootOpen: null,   // { id, slots } when a loot container is open
   };
 
   function on(event, fn) {

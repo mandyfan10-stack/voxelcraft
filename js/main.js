@@ -2,9 +2,13 @@ import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG,
          SPRINT_SPEED_MULT, STAMINA_MAX, STAMINA_SPRINT_DRAIN, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
          HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG } from './config.js';
-import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt } from './world.js';
+import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt, getBlockAt } from './world.js';
 import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY, resetGame, meleeAttack, getMobBlips } from './entities.js';
 import { cycle, updateCycle, getAtmosphere, getSunDirection } from './daynight.js';
+import { playerState, addXp, xpForLevel } from './playerstate.js';
+import { initCommands } from './commands.js';
+import { getItem, itemMeta, dropForBlock } from './items.js';
+import { RECIPES } from './crafting.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +33,6 @@ const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1
 // ── Input ────────────────────────────────────────────────────────────────────
 
 const keys = { w: 0, a: 0, s: 0, d: 0, j: 0, shift: 0 };
-let selIdx = 0;
 let locked = false;
 
 addEventListener('keydown', e => {
@@ -40,7 +43,7 @@ addEventListener('keydown', e => {
   else if (c === 'KeyD')      keys.d = 1;
   else if (c === 'Space')     keys.j = 1;
   else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
-  else if (e.key >= '1' && e.key <= '8') { selIdx = +e.key - 1; window.GameBridge.setState({ selIdx }); }
+  else if (e.key >= '1' && e.key <= '8') { playerState.selIdx = +e.key - 1; pushInventory(); }
 });
 addEventListener('keyup', e => {
   const c = e.code;
@@ -64,7 +67,6 @@ window.addEventListener('blur', () => {
 // an early click can't be missed.
 
 window.GameBridge.on('respawn', () => { resetGame(); });
-window.GameBridge.on('selectSlot', (idx) => { selIdx = Math.max(0, Math.min(7, idx)); });
 
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => {
@@ -90,13 +92,31 @@ document.addEventListener('mousemove', e => {
 cvs.addEventListener('mousedown', e => {
   if (!locked || player.dead) return;
   if (e.button === 0) {
-    // Try melee on nearby mob first; fall back to mining block
+    // Melee a nearby zombie first; otherwise mine the targeted block.
     if (!meleeAttack()) {
       const r = raycast(camera);
-      if (r) setBlockAt(...r.hit, 0);
+      if (r) {
+        const bid = getBlockAt(...r.hit);
+        setBlockAt(...r.hit, 0);
+        const drop = dropForBlock(bid);
+        if (drop) playerState.inventory.add(drop, 1);
+        addXp(1);
+        pushInventory();
+      }
     }
   }
-  if (e.button === 2) { const r = raycast(camera); if (r && r.prev) setBlockAt(...r.prev, [1,2,3,5,6,4,8,9][selIdx] || 1); }
+  if (e.button === 2) {
+    const slot = playerState.inventory.slots[playerState.selIdx];
+    if (!slot) return;
+    const item = getItem(slot.id);
+    if (!item || !item.place) return;
+    const r = raycast(camera);
+    if (r && r.prev) {
+      setBlockAt(...r.prev, item.blockId);
+      playerState.inventory.removeAt(playerState.selIdx, 1);
+      pushInventory();
+    }
+  }
 });
 
 // ── Movement ─────────────────────────────────────────────────────────────────
@@ -211,6 +231,14 @@ function updateAtmosphere() {
 let _bridgeTickAcc = 0;
 const BRIDGE_TICK = 1 / 10; // push state at 10 Hz, not every frame
 
+// Mirror the authoritative inventory snapshot to React (event-driven).
+function pushInventory() {
+  window.GameBridge.setState({
+    inv:    playerState.inventory.serialize(),
+    selIdx: playerState.selIdx,
+  });
+}
+
 function updateHUD() {
   _bridgeTickAcc += FIXED_DT;
   if (_bridgeTickAcc < BRIDGE_TICK) return;
@@ -218,18 +246,23 @@ function updateHUD() {
 
   window.GameBridge.setState({
     hp:          Math.max(0, player.hp),
-    maxHp:       100,
+    maxHp:       playerState.maxHp,
     stamina:     Math.max(0, player.stamina),
     hunger:      Math.max(0, player.hunger),
+    thirst:      Math.max(0, playerState.thirst),
     dayCount:    cycle.dayCount,
     isNight:     cycle.isNight,
+    isBloodMoon: !!cycle.isBloodMoon,
     timeFrac:    cycle.frac,
     posX:        Math.round(player.pos.x),
     posY:        Math.round(player.pos.y),
     posZ:        Math.round(player.pos.z),
     hordeActive: cycle.isNight,
     mobBlips:    getMobBlips(),
-    selIdx,
+    selIdx:      playerState.selIdx,
+    xp:          playerState.xp,
+    level:       playerState.level,
+    nextLevelXp: xpForLevel(playerState.level + 1),
   });
 }
 
@@ -325,5 +358,17 @@ addEventListener('resize', () => {
 updateChunks();
 while (chunkQueue.length > 0) processChunkQueue();
 player.pos.set(0, groundY(0, 0) + 3, 0);
+
+// ── Inventory / crafting wiring ────────────────────────────────────────────
+initCommands(pushInventory);
+window.GameBridge.setState({ itemMeta: itemMeta(), recipeMeta: RECIPES });
+playerState.inventory.add('wood_pickaxe', 1);
+playerState.inventory.add('wood_club', 1);
+playerState.inventory.add('cooked_meat', 3);
+playerState.inventory.add('water_jar', 2);
+playerState.inventory.add('dirt', 16);
+playerState.inventory.add('wood', 8);
+pushInventory();
+
 setTimeout(() => spawnMobs(scene), 60);
 loop();
