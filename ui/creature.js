@@ -222,6 +222,18 @@ function VoxelBlock({
       side: "#6b665a",
       front: "#a89274",
       flecks: "#3a3630"
+    },
+    sand: {
+      top: "#d8c896",
+      side: "#9a8a5c",
+      front: "#b8a874",
+      flecks: "#7a6a44"
+    },
+    snow: {
+      top: "#e8ecf0",
+      side: "#9aa4ac",
+      front: "#c4ccd2",
+      flecks: "#7a848c"
     }
   };
   const p = palettes[kind] || palettes.dirt;

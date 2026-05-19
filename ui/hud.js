@@ -10,7 +10,7 @@ function HUD({
   const [hp, setHp] = React.useState(100);
   const [stamina, setStamina] = React.useState(100);
   const [hunger, setHunger] = React.useState(100);
-  const [selectedSlot, setSelectedSlot] = React.useState(2);
+  const [selectedSlot, setSelectedSlot] = React.useState(0);
   const [compassDeg, setCompassDeg] = React.useState(0);
   const [posX, setPosX] = React.useState(0);
   const [posY, setPosY] = React.useState(64);
@@ -19,6 +19,15 @@ function HUD({
   const [isNight, setIsNight] = React.useState(false);
   const [timeFrac, setTimeFrac] = React.useState(0);
   const [mobBlips, setMobBlips] = React.useState([]);
+  const [inv, setInv] = React.useState([]);
+  const [itemMeta, setItemMeta] = React.useState({});
+  const [maxHp, setMaxHp] = React.useState(100);
+  const [thirst, setThirst] = React.useState(100);
+  const [level, setLevel] = React.useState(1);
+  const [xp, setXp] = React.useState(0);
+  const [levelXp, setLevelXp] = React.useState(0);
+  const [nextLevelXp, setNextLevelXp] = React.useState(0);
+  const [isBloodMoon, setIsBloodMoon] = React.useState(false);
 
   // Visual effects state
   const [damageFlash, setDamageFlash] = React.useState(0); // 0-1 intensity
@@ -55,6 +64,15 @@ function HUD({
       setIsNight(!!s.isNight);
       setTimeFrac(s.timeFrac ?? 0);
       setMobBlips(s.mobBlips ?? []);
+      setInv(s.inv ?? []);
+      setItemMeta(s.itemMeta ?? {});
+      setMaxHp(s.maxHp ?? 100);
+      setThirst(s.thirst ?? 100);
+      setLevel(s.level ?? 1);
+      setXp(s.xp ?? 0);
+      setLevelXp(s.levelXp ?? 0);
+      setNextLevelXp(s.nextLevelXp ?? 0);
+      setIsBloodMoon(!!s.isBloodMoon);
       if (s.selIdx !== undefined) setSelectedSlot(s.selIdx);
     };
     window.GameBridge.on('state', handler);
@@ -86,44 +104,25 @@ function HUD({
     return () => clearInterval(i);
   }, []);
 
-  // Matches [1,2,3,5,6,4,8,9] block IDs in main.js RMB handler
-  const hotbar = [{
-    kind: "dirt",
-    label: "DIRT",
-    count: 64
-  }, {
-    kind: "stone",
-    label: "STONE",
-    count: 32
-  }, {
-    kind: "stone",
-    label: "CONCRETE",
-    count: 18
-  }, {
-    kind: "leaves",
-    label: "GRAVEL",
-    count: 24
-  }, {
-    kind: "leaves",
-    label: "LEAVES",
-    count: 24
-  }, {
-    kind: "wood",
-    label: "WOOD",
-    count: 16
-  }, {
-    kind: "glass",
-    label: "SNOW/ASH",
-    count: 8
-  }, {
-    kind: "metal",
-    label: "RUBBLE",
-    count: 4
-  }];
+  // Resolve a hotbar slot to display data via the item registry snapshot.
+  function slotItem(i) {
+    const s = inv[i];
+    if (!s) return null;
+    const m = itemMeta[s.id] || {};
+    return {
+      id: s.id,
+      count: s.count,
+      durability: s.durability,
+      kind: m.kind || 'dirt',
+      name: m.name || s.id,
+      maxDura: m.durability || 0
+    };
+  }
   function handleSlotClick(i) {
     setSelectedSlot(i);
     window.GameBridge.emit('selectSlot', i);
   }
+  const selHotbar = slotItem(selectedSlot);
   return /*#__PURE__*/React.createElement("div", {
     "data-screen-label": "02 HUD",
     style: {
@@ -145,7 +144,7 @@ function HUD({
   }, /*#__PURE__*/React.createElement(VitalsRow, {
     label: "HP",
     value: Math.round(hp),
-    max: 100,
+    max: maxHp,
     kind: ""
   }), /*#__PURE__*/React.createElement(VitalsRow, {
     label: "STA",
@@ -157,6 +156,11 @@ function HUD({
     value: Math.round(hunger),
     max: 100,
     kind: "hunger"
+  }), /*#__PURE__*/React.createElement(VitalsRow, {
+    label: "THR",
+    value: Math.round(thirst),
+    max: 100,
+    kind: "thirst"
   }), /*#__PURE__*/React.createElement("div", {
     className: "mono dim",
     style: {
@@ -181,7 +185,35 @@ function HUD({
     style: {
       marginLeft: 6
     }
-  }, posZ)))), /*#__PURE__*/React.createElement("div", {
+  }, posZ))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 2
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mono dim",
+    style: {
+      fontSize: 10,
+      letterSpacing: "0.14em",
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 3
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "LVL ", /*#__PURE__*/React.createElement("span", {
+    className: "cyan",
+    style: {
+      fontSize: 12
+    }
+  }, level)), /*#__PURE__*/React.createElement("span", null, Math.max(0, xp - levelXp), " / ", Math.max(1, nextLevelXp - levelXp), " XP")), /*#__PURE__*/React.createElement("div", {
+    className: "bar xp",
+    style: {
+      height: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fill",
+    style: {
+      width: Math.max(0, Math.min(100, (xp - levelXp) / Math.max(1, nextLevelXp - levelXp) * 100)) + "%"
+    }
+  })))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       right: 24,
@@ -199,7 +231,10 @@ function HUD({
   }), showMinimap && /*#__PURE__*/React.createElement(Minimap, {
     compassDeg: compassDeg,
     mobBlips: mobBlips
-  })), hordeAlert && /*#__PURE__*/React.createElement(HordeAlert, null), /*#__PURE__*/React.createElement("div", {
+  })), hordeAlert && /*#__PURE__*/React.createElement(HordeAlert, {
+    bloodMoon: isBloodMoon,
+    count: mobBlips.length
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       left: "50%",
@@ -217,7 +252,7 @@ function HUD({
       fontSize: 10,
       letterSpacing: "0.2em"
     }
-  }, "\u2591 SLOT ", selectedSlot + 1, " \u2591 ", hotbar[selectedSlot].label, " \u2591 \xD7", hotbar[selectedSlot].count), /*#__PURE__*/React.createElement("div", {
+  }, "\u2591 SLOT ", selectedSlot + 1, " \u2591 ", selHotbar ? selHotbar.name.toUpperCase() : "EMPTY", selHotbar && selHotbar.count > 1 ? " ×" + selHotbar.count : "", " \u2591"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 4,
@@ -226,50 +261,72 @@ function HUD({
       border: "1px solid var(--steel-2)",
       boxShadow: "inset 0 1px 0 rgba(216,210,196,0.06), 0 4px 16px rgba(0,0,0,0.7)"
     }
-  }, hotbar.map((slot, i) => /*#__PURE__*/React.createElement("button", {
-    key: i,
-    onClick: () => handleSlotClick(i),
-    style: {
-      width: 60,
-      height: 60,
-      background: "rgba(20,17,13,0.9)",
-      border: i === selectedSlot ? "2px solid var(--cyan)" : "1px solid var(--steel-2)",
-      boxShadow: i === selectedSlot ? "inset 0 0 0 1px rgba(0,255,255,0.3), 0 0 16px rgba(0,255,255, calc(0.5 * var(--cyanlevel)))" : "inset 0 1px 0 rgba(216,210,196,0.05)",
-      position: "relative",
-      cursor: "crosshair",
-      padding: 0
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "absolute",
-      inset: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement(VoxelBlock, {
-    kind: slot.kind,
-    size: 42
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "mono",
-    style: {
-      position: "absolute",
-      right: 3,
-      bottom: 1,
-      fontSize: 10,
-      color: "var(--bone)",
-      textShadow: "1px 1px 0 #000, -1px -1px 0 #000"
-    }
-  }, slot.count), /*#__PURE__*/React.createElement("div", {
-    className: "mono dim",
-    style: {
-      position: "absolute",
-      left: 3,
-      top: 1,
-      fontSize: 9,
-      color: i === selectedSlot ? "var(--cyan)" : "var(--bone-dim)"
-    }
-  }, i + 1))))), /*#__PURE__*/React.createElement("div", {
+  }, Array.from({
+    length: 8
+  }).map((_, i) => {
+    const it = slotItem(i);
+    const duraFrac = it && it.maxDura > 0 && it.durability !== undefined ? Math.max(0, Math.min(1, it.durability / it.maxDura)) : null;
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => handleSlotClick(i),
+      style: {
+        width: 60,
+        height: 60,
+        background: "rgba(20,17,13,0.9)",
+        border: i === selectedSlot ? "2px solid var(--cyan)" : "1px solid var(--steel-2)",
+        boxShadow: i === selectedSlot ? "inset 0 0 0 1px rgba(0,255,255,0.3), 0 0 16px rgba(0,255,255, calc(0.5 * var(--cyanlevel)))" : "inset 0 1px 0 rgba(216,210,196,0.05)",
+        position: "relative",
+        cursor: "crosshair",
+        padding: 0
+      }
+    }, it && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement(VoxelBlock, {
+      kind: it.kind,
+      size: 42
+    })), it && it.count > 1 && /*#__PURE__*/React.createElement("div", {
+      className: "mono",
+      style: {
+        position: "absolute",
+        right: 3,
+        bottom: 1,
+        fontSize: 10,
+        color: "var(--bone)",
+        textShadow: "1px 1px 0 #000, -1px -1px 0 #000"
+      }
+    }, it.count), duraFrac !== null && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        left: 4,
+        right: 4,
+        bottom: 3,
+        height: 3,
+        background: "#0a0908",
+        border: "1px solid var(--steel-2)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: "100%",
+        width: duraFrac * 100 + "%",
+        background: duraFrac < 0.25 ? "var(--blood)" : duraFrac < 0.5 ? "#cc8800" : "var(--olive)"
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "mono dim",
+      style: {
+        position: "absolute",
+        left: 3,
+        top: 1,
+        fontSize: 9,
+        color: i === selectedSlot ? "var(--cyan)" : "var(--bone-dim)"
+      }
+    }, i + 1));
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       left: 24,
@@ -750,7 +807,10 @@ function CompassStrip({
     }
   }, m.isMain ? m.label : "·") : null));
 }
-function HordeAlert() {
+function HordeAlert({
+  bloodMoon,
+  count
+}) {
   return /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
@@ -766,20 +826,20 @@ function HordeAlert() {
   }, /*#__PURE__*/React.createElement("div", {
     className: "display flicker",
     style: {
-      fontSize: 36,
-      color: "var(--blood)",
+      fontSize: bloodMoon ? 40 : 30,
+      color: bloodMoon ? "var(--blood)" : "#cc7744",
       letterSpacing: "0.2em",
       textShadow: "0 0 24px rgba(204,34,0,0.9), 2px 0 0 rgba(0,255,255,0.3)",
       fontWeight: 900
     }
-  }, "\u26A0 HORDE DETECTED"), /*#__PURE__*/React.createElement("div", {
+  }, bloodMoon ? "☠ BLOOD MOON HORDE" : "⚠ HOSTILES NEARBY"), /*#__PURE__*/React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 11,
       letterSpacing: "0.25em",
       color: "var(--bone-dim)"
     }
-  }, "\u2591 47m N \u2591 12 HOSTILES \u2591 CLOSING FAST \u2591"), /*#__PURE__*/React.createElement("div", {
+  }, "\u2591 ", count, " HOSTILE", count !== 1 ? "S" : "", " TRACKED \u2591 ", bloodMoon ? "SURVIVE UNTIL DAWN" : "STAY ALERT", " \u2591"), bloodMoon && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 6,
       display: "flex",
@@ -787,16 +847,16 @@ function HordeAlert() {
       alignItems: "center"
     }
   }, /*#__PURE__*/React.createElement(CreatureSilhouette, {
-    kind: "troll",
-    size: 60,
+    kind: "walker",
+    size: 56,
     className: "pulse"
   }), /*#__PURE__*/React.createElement(CreatureSilhouette, {
     kind: "brute",
-    size: 60,
+    size: 56,
     className: "pulse"
   }), /*#__PURE__*/React.createElement(CreatureSilhouette, {
-    kind: "husk",
-    size: 60,
+    kind: "runner",
+    size: 56,
     className: "pulse"
   })));
 }

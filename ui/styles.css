@@ -279,6 +279,12 @@ html, body { margin: 0; padding: 0; background: var(--ink); color: var(--bone); 
 .bar.hunger > .fill {
   background: linear-gradient(180deg, #88aa44 0%, var(--olive) 50%, var(--olive-deep) 100%);
 }
+.bar.thirst > .fill {
+  background: linear-gradient(180deg, #55c4e6 0%, #2980a8 50%, #123e52 100%);
+}
+.bar.xp > .fill {
+  background: linear-gradient(180deg, #7be0ff 0%, #00a6cc 50%, #005f7a 100%);
+}
 
 /* ── Glitch text ──────────────────────────────────────────────────── */
 .glitch {

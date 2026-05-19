@@ -248,6 +248,8 @@ function VoxelBlock({ kind = "dirt", size = 44, selected = false }) {
     leaves: { top: "#5a8a35", side: "#1a3d10", front: "#2a4d18", flecks: "#0a1d05" },
     glass:  { top: "rgba(0,255,255,0.25)", side: "rgba(0,180,180,0.2)", front: "rgba(0,255,255,0.18)", flecks: "rgba(0,255,255,0.4)" },
     bone:   { top: "#d8d2c4", side: "#6b665a", front: "#a89274", flecks: "#3a3630" },
+    sand:   { top: "#d8c896", side: "#9a8a5c", front: "#b8a874", flecks: "#7a6a44" },
+    snow:   { top: "#e8ecf0", side: "#9aa4ac", front: "#c4ccd2", flecks: "#7a848c" },
   };
   const p = palettes[kind] || palettes.dirt;
   const s = size;

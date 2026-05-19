@@ -262,7 +262,9 @@ function updateHUD() {
     selIdx:      playerState.selIdx,
     xp:          playerState.xp,
     level:       playerState.level,
+    levelXp:     xpForLevel(playerState.level),
     nextLevelXp: xpForLevel(playerState.level + 1),
+    perks:       playerState.perks,
   });
 }
 

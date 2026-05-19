@@ -25,9 +25,11 @@ window.GameBridge = (function () {
     selIdx: 0,
     xp: 0,
     level: 1,
+    levelXp: 0,
     nextLevelXp: 0,
     itemMeta: {},
     recipeMeta: [],
+    perks: { miningSpeed: 1, meleeDmg: 1 },
     lootOpen: null,   // { id, slots } when a loot container is open
   };
 
