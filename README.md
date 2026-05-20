@@ -22,11 +22,12 @@ python3 -m http.server 8000
 ```sh
 npm install            # installs Babel + ESLint (dev-only)
 npm run build:ui       # compiles ui/*.jsx → ui/*.js (only needed after UI changes)
+npm run gen-icons      # regenerates icon-180/192/512.png (pure node:zlib, no deps)
 npm test               # node:test suite (48 tests, ~250ms)
 npm run lint           # ESLint on game and tests
 ```
 
-## Controls
+## Controls — desktop
 
 | Key      | Action                                          |
 |----------|-------------------------------------------------|
@@ -43,6 +44,47 @@ npm run lint           # ESLint on game and tests
 
 In the inventory: click a stack to pick it up, click another slot to place it;
 shift-click to split; right-click to drop; double-click food/drink to consume.
+
+## Controls — touch (phone / tablet)
+
+Touch is auto-detected via `(pointer: coarse)`. The overlay appears only on
+touch devices; desktop is untouched.
+
+| Gesture / Button   | Action                                       |
+|--------------------|----------------------------------------------|
+| Virtual joystick   | Move (full push auto-sprints)                |
+| Drag on canvas     | Look                                         |
+| MINE (hold)        | Mine block / swing melee                     |
+| PLACE              | Place selected hotbar block                  |
+| E                  | Interact (loot crate / drink water)          |
+| JUMP (hold)        | Jump                                         |
+| Hotbar slot tap    | Select hotbar slot                           |
+| INV (top-right)    | Open inventory                               |
+| ⏸ (top-right)      | Pause / open settings                        |
+
+On touch, the renderer caps pixel ratio at 1.0, defaults the render
+distance to 3 chunks, and shrinks fog far + camera far for mobile GPU
+budget. The Settings panel still exposes both sliders so you can dial
+them back up on a beefy phone.
+
+## GitHub Pages deploy
+
+Two deploy modes — pick one in your repo's **Settings → Pages**:
+
+1. **Source: GitHub Actions** (recommended).
+   Push to `main` triggers the workflow in `.github/workflows/ci.yml`,
+   which runs the tests, generates icons, builds the UI, and publishes the
+   working tree via `actions/deploy-pages`. The deployed site lives at
+   `https://<user>.github.io/<repo>/`.
+
+2. **Source: Deploy from a branch → main / (root)**.
+   No workflow needed — GitHub serves the repo as-is. `.nojekyll` (already
+   committed) disables Jekyll preprocessing. The deploy job in CI is
+   inert in this mode.
+
+Mobile install: open the deployed URL on a phone, then
+**Add to Home Screen** in the browser menu. The PWA manifest +
+apple-touch-icon make it launch full-screen like a native app.
 
 ## Survival loop
 

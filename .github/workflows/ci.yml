@@ -5,6 +5,9 @@ on:
     branches: [main, master, "claude/**"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,3 +28,36 @@ jobs:
             git diff --stat ui/
             exit 1
           fi
+
+  # Deploy to GitHub Pages. Requires repo Settings → Pages → Source: "GitHub Actions".
+  # If the repo uses "Source: Deploy from a branch" instead, this job silently skips —
+  # actions/deploy-pages only succeeds when the Source is set to Actions.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run gen-icons
+      - run: npm run build:ui
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
