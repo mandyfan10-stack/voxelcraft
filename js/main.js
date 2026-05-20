@@ -1,9 +1,10 @@
 import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG,
          SPRINT_SPEED_MULT, STAMINA_MAX, STAMINA_SPRINT_DRAIN, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
-         HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG } from './config.js';
+         HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG,
+         THIRST_MAX, THIRST_DRAIN_RATE, THIRST_DEHYDRATION_DMG } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt, getBlockAt } from './world.js';
-import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, updateMobs, groundY, resetGame, meleeAttack, getMobBlips } from './entities.js';
+import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, spawnHordeWave, updateMobs, groundY, resetGame, meleeAttack, getMobBlips } from './entities.js';
 import { cycle, updateCycle, getAtmosphere, getSunDirection } from './daynight.js';
 import { playerState, addXp, xpForLevel } from './playerstate.js';
 import { initCommands } from './commands.js';
@@ -43,6 +44,15 @@ addEventListener('keydown', e => {
   else if (c === 'KeyD')      keys.d = 1;
   else if (c === 'Space')     keys.j = 1;
   else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
+  else if (c === 'KeyE') {
+    if (locked && !player.dead) {
+      const r = raycast(camera);
+      if (r && getBlockAt(...r.hit) === 7) {
+        playerState.thirst = Math.min(THIRST_MAX, playerState.thirst + 22);
+        window.GameBridge?.emit('drink');
+      }
+    }
+  }
   else if (e.key >= '1' && e.key <= '8') { playerState.selIdx = +e.key - 1; pushInventory(); }
 });
 addEventListener('keyup', e => {
@@ -279,7 +289,10 @@ function updateHUD() {
 function update(dt) {
   updateAtmosphere(); // atmosphere always updates (world visible behind menu)
   if (!window.GameBridge.state.started) return;
-  updateCycle(dt, () => spawnHordeMob(scene));
+  updateCycle(dt, (info) => {
+    if (info.bloodMoon) spawnHordeWave(scene, info.count, true);
+    else                spawnHordeMob(scene, false);
+  });
   updateHUD();
 
   wish.set(0, 0, 0);
@@ -313,6 +326,12 @@ function update(dt) {
     player.hunger = Math.max(0, player.hunger - HUNGER_DRAIN_RATE * dt);
     if (player.hunger <= 0 && !player.dead) {
       player.hp = Math.max(0, player.hp - HUNGER_STARVATION_DMG * dt);
+    }
+
+    // Thirst drain — dehydration damage also caught in updateMobs.
+    playerState.thirst = Math.max(0, playerState.thirst - THIRST_DRAIN_RATE * dt);
+    if (playerState.thirst <= 0 && !player.dead) {
+      player.hp = Math.max(0, player.hp - THIRST_DEHYDRATION_DMG * dt);
     }
   }
 

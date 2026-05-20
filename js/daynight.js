@@ -1,34 +1,48 @@
-import { DAY_DURATION, NIGHT_START_FRAC, DAWN_START_FRAC, HORDE_INTERVAL } from './config.js';
+import { DAY_DURATION, NIGHT_START_FRAC, DAWN_START_FRAC, HORDE_INTERVAL,
+         BLOOD_MOON_INTERVAL, BLOOD_MOON_PULSE, BLOOD_MOON_PER_PULSE } from './config.js';
 
 export const cycle = {
   time: 0,
   dayCount: 1,
   isNight: false,
+  isBloodMoon: false,
+  bloodMoonWave: 0,
   frac: 0,
   speedMult: 1.0,
 };
 
 let hordeAccum = 0;
 
-export function updateCycle(dt, spawnHordeCallback) {
+// `onHorde` receives { bloodMoon, count, wave } — main.js translates to spawns.
+export function updateCycle(dt, onHorde) {
   cycle.time = (cycle.time + dt) % DAY_DURATION;
   cycle.frac = cycle.time / DAY_DURATION;
 
   const wasNight = cycle.isNight;
   cycle.isNight = cycle.frac >= NIGHT_START_FRAC && cycle.frac < DAWN_START_FRAC;
-
   if (wasNight && !cycle.isNight) cycle.dayCount++;
-
+  cycle.isBloodMoon = cycle.isNight && (cycle.dayCount % BLOOD_MOON_INTERVAL === 0);
   cycle.speedMult = cycle.isNight ? 1.8 : 1.0;
 
   if (cycle.isNight) {
     hordeAccum += dt;
-    if (hordeAccum >= HORDE_INTERVAL) {
+    if (cycle.isBloodMoon) {
+      if (hordeAccum >= BLOOD_MOON_PULSE) {
+        hordeAccum = 0;
+        cycle.bloodMoonWave++;
+        // Wave size escalates as the night progresses.
+        const elapsed = (cycle.frac - NIGHT_START_FRAC) / (DAWN_START_FRAC - NIGHT_START_FRAC);
+        const ramp = 1 + Math.floor(elapsed * 4);
+        const count = Math.min(8, BLOOD_MOON_PER_PULSE + ramp);
+        onHorde({ bloodMoon: true, count, wave: cycle.bloodMoonWave });
+      }
+    } else if (hordeAccum >= HORDE_INTERVAL) {
       hordeAccum = 0;
-      spawnHordeCallback();
+      onHorde({ bloodMoon: false, count: 1, wave: 0 });
     }
   } else {
     hordeAccum = 0;
+    cycle.bloodMoonWave = 0;
   }
 }
 
