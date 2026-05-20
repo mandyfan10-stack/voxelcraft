@@ -163,7 +163,7 @@ function Inventory({ onClose }) {
   };
 
   return (
-    <div data-screen-label="03 Inventory" style={{
+    <div data-screen-label="03 Inventory" className="voxelfear-inventory-shell" style={{
       position: "absolute", inset: 0,
       background: "rgba(5,3,2,0.85)", backdropFilter: "blur(3px)",
       display: "grid", gridTemplateColumns: "300px 1fr 348px",

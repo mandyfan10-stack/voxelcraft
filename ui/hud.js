@@ -697,6 +697,7 @@ function Minimap({
   // compass strip uses compassDeg for the heading display only
   const r = RAD_R;
   return /*#__PURE__*/React.createElement("div", {
+    className: "voxelfear-minimap",
     style: {
       width: 220,
       height: 230,

@@ -261,6 +261,7 @@ function Inventory({
   };
   return /*#__PURE__*/React.createElement("div", {
     "data-screen-label": "03 Inventory",
+    className: "voxelfear-inventory-shell",
     style: {
       position: "absolute",
       inset: 0,

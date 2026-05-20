@@ -82,7 +82,7 @@ function Loot({ onClose }) {
             ▪ EMPTY ▪
           </div>
         ) : (
-          <div style={{
+          <div className="voxelfear-loot-grid" style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 8,

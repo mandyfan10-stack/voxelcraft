@@ -115,6 +115,7 @@ function Loot({
       letterSpacing: "0.12em"
     }
   }, "\u25AA EMPTY \u25AA") : /*#__PURE__*/React.createElement("div", {
+    className: "voxelfear-loot-grid",
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(4, 1fr)",

@@ -494,7 +494,7 @@ function Minimap({ compassDeg, mobBlips = [] }) {
   const r = RAD_R;
 
   return (
-    <div style={{
+    <div className="voxelfear-minimap" style={{
       width: 220, height: 230,
       background: "rgba(10,9,8,0.85)",
       border: "1px solid var(--steel-2)",

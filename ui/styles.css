@@ -366,3 +366,45 @@ html, body { margin: 0; padding: 0; background: var(--ink); color: var(--bone); 
   outline-offset: -2px;
   box-shadow: 0 0 16px rgba(0,255,255, calc(0.7 * var(--cyanlevel)));
 }
+
+/* ── Mobile / touch overrides ─────────────────────────────────────── */
+
+html, body { height: 100dvh; width: 100dvw; }
+
+/* Kill iOS Safari's tap-highlight flash on every interactive element. */
+button, .btn, .kbd, .panel { -webkit-tap-highlight-color: transparent; }
+
+/* The Three.js canvas owns its touch gestures (look + audio unlock); never
+   let the browser hijack them for pinch-zoom or pull-to-refresh. */
+canvas#c { touch-action: none; }
+
+@media (pointer: coarse), (max-width: 768px) {
+  /* Tweaks panel is debug-only — irrelevant on phones. */
+  [data-screen-label="07 Tweaks"], .tweaks-root { display: none !important; }
+
+  /* Bars / chips a touch denser. */
+  .kbd { font-size: 9px; padding: 1px 4px; }
+
+  /* Inventory → single-column vertical stack so the grid fits a phone. */
+  .voxelfear-inventory-shell {
+    grid-template-columns: 1fr !important;
+    grid-auto-rows: max-content;
+    overflow-y: auto;
+    gap: 10px !important;
+    padding: 12px !important;
+    align-content: start;
+  }
+  /* Loot grid: 4 cols → 3 on narrow viewports. */
+  .voxelfear-loot-grid { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* Very narrow phones — make the minimap shrink instead of just hiding. */
+@media (max-width: 480px) {
+  .voxelfear-minimap { width: 140px !important; height: 150px !important; }
+}
+
+/* Portrait phones — the right edge is reserved for action buttons,
+   so the minimap goes away. */
+@media (orientation: portrait) and (max-width: 768px) {
+  .voxelfear-minimap { display: none !important; }
+}
