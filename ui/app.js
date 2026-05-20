@@ -1,4 +1,81 @@
-// app.jsx — Game shell. Routes between menu / hud / inventory / settings / death.
+// app.jsx — Game shell. Routes between menu / hud / inventory / loot / settings / death,
+// and shows a fatal-error screen if the game module emits one or the UI tree throws.
+
+class ErrorBoundary extends React.Component {
+  constructor(p) {
+    super(p);
+    this.state = {
+      error: null
+    };
+  }
+  static getDerivedStateFromError(error) {
+    return {
+      error
+    };
+  }
+  componentDidCatch(error, info) {
+    console.error('UI error:', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return /*#__PURE__*/React.createElement(FatalErrorScreen, {
+        message: 'UI crashed: ' + (this.state.error.message || this.state.error)
+      });
+    }
+    return this.props.children;
+  }
+}
+function FatalErrorScreen({
+  message
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(5,3,2,0.95)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 40,
+      zIndex: 9999,
+      pointerEvents: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "panel metal",
+    style: {
+      padding: 32,
+      maxWidth: 540,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tag",
+    style: {
+      color: "var(--blood)",
+      marginBottom: 8
+    }
+  }, "// FATAL ERROR"), /*#__PURE__*/React.createElement("div", {
+    className: "stencil",
+    style: {
+      fontSize: 28,
+      marginBottom: 16
+    }
+  }, "SIGNAL LOST"), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 12,
+      lineHeight: 1.6,
+      color: "var(--bone)"
+    }
+  }, message), /*#__PURE__*/React.createElement("button", {
+    className: "btn primary",
+    onClick: () => location.reload(),
+    style: {
+      marginTop: 24,
+      padding: "12px 24px",
+      fontSize: 14
+    }
+  }, "\u25B6 RELOAD")));
+}
 
 // Distress / CRT look — applied once to the document.
 const DISTRESS = {
@@ -14,6 +91,7 @@ function App() {
   const [screen, setScreen] = React.useState("menu"); // menu | hud | inventory | loot | settings | death
   const [hordeActive, setHordeActive] = React.useState(false);
   const [hasSave, setHasSave] = React.useState(!!window.GameBridge.state.hasSave);
+  const [fatalError, setFatalError] = React.useState(null);
 
   // Apply the distress CSS variables once
   React.useEffect(() => {
@@ -35,11 +113,14 @@ function App() {
         setScreen(prev => prev === "loot" ? prev : "loot");
       }
     };
+    const onFatal = info => setFatalError(info?.reason || 'Unknown fatal error');
     window.GameBridge.on("death", onDeath);
     window.GameBridge.on("state", onState);
+    window.GameBridge.on("fatalError", onFatal);
     return () => {
       window.GameBridge.off("death", onDeath);
       window.GameBridge.off("state", onState);
+      window.GameBridge.off("fatalError", onFatal);
     };
   }, []);
   function handleStart() {
@@ -90,6 +171,9 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [screen]);
   const inGame = screen !== "menu" && screen !== "death";
+  if (fatalError) return /*#__PURE__*/React.createElement(FatalErrorScreen, {
+    message: fatalError
+  });
   return /*#__PURE__*/React.createElement(React.Fragment, null, !inGame && /*#__PURE__*/React.createElement(VoxelBG, null), inGame && /*#__PURE__*/React.createElement(HUD, {
     showMinimap: true,
     hordeAlert: hordeActive,
@@ -118,4 +202,4 @@ function App() {
     className: "crt"
   }));
 }
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(App, null)));

@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG,
          SPRINT_SPEED_MULT, STAMINA_MAX, STAMINA_SPRINT_DRAIN, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
-         HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG,
+         HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG,
          THIRST_MAX, THIRST_DRAIN_RATE, THIRST_DEHYDRATION_DMG,
          BLOCK_HARDNESS, HAND_MINE_SPEED } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt, getBlockAt } from './world.js';
@@ -11,7 +11,7 @@ import { playerState, addXp, xpForLevel } from './playerstate.js';
 import { initCommands } from './commands.js';
 import { getItem, itemMeta, dropForBlock } from './items.js';
 import { RECIPES } from './crafting.js';
-import { maybeSpawnCrate, findCrateNear, crates, clearCrates, loadCrate, setNextCrateId, setCratedChunks } from './crates.js';
+import { maybeSpawnCrate, findCrateNear, clearCrates, loadCrate, setNextCrateId, setCratedChunks } from './crates.js';
 import { initAudio, unlockAudio, startAmbient, updateAmbient } from './audio.js';
 import { saveGame, hasSave, readSave } from './save.js';
 import { editedBlocks } from './world.js';
@@ -105,7 +105,7 @@ cvs.addEventListener('click', () => {
 
 cvs.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
-  alert('WebGL context lost. Please reload the page.');
+  window.GameBridge?.emit('fatalError', { reason: 'WebGL context lost. The renderer has been disabled — reload to recover.' });
 }, false);
 cvs.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
 
@@ -523,14 +523,23 @@ function update(dt) {
 const clock = new THREE.Clock();
 const FIXED_DT = 1 / 60;
 let accumulator = 0;
+let _fatalEmitted = false;
 
 function loop() {
   requestAnimationFrame(loop);
-  const frameTime = Math.min(0.25, clock.getDelta());
-  accumulator += frameTime;
-  while (accumulator >= FIXED_DT) { update(FIXED_DT); accumulator -= FIXED_DT; }
-  processChunkQueue();
-  renderer.render(scene, camera);
+  try {
+    const frameTime = Math.min(0.25, clock.getDelta());
+    accumulator += frameTime;
+    while (accumulator >= FIXED_DT) { update(FIXED_DT); accumulator -= FIXED_DT; }
+    processChunkQueue();
+    renderer.render(scene, camera);
+  } catch (e) {
+    console.error('render loop error:', e);
+    if (!_fatalEmitted) {
+      _fatalEmitted = true;
+      window.GameBridge?.emit('fatalError', { reason: 'Render loop crashed: ' + (e && e.message ? e.message : String(e)) });
+    }
+  }
 }
 
 addEventListener('resize', () => {

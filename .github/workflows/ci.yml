@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, "claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build:ui
+      - name: Verify JSX compiles deterministically
+        run: |
+          if ! git diff --quiet ui/; then
+            echo "::error::ui/*.js drifted from ui/*.jsx — run 'npm run build:ui' and commit."
+            git diff --stat ui/
+            exit 1
+          fi
