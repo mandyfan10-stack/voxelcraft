@@ -1,7 +1,9 @@
 // main-menu.jsx — Main Menu screen with worn survival aesthetic + countdown dread.
 
 function MainMenu({
-  onStart
+  onStart,
+  onLoad,
+  hasSave
 }) {
   const [difficulty, setDifficulty] = React.useState("HARD");
   const [seed, setSeed] = React.useState("BLOODMOON-7724");
@@ -269,25 +271,19 @@ function MainMenu({
       fontSize: 22,
       letterSpacing: "0.2em"
     }
-  }, "\u25B6 START SURVIVAL"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "1fr 1fr",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, "\u25B6 START SURVIVAL"), /*#__PURE__*/React.createElement("button", {
     className: "btn",
+    onClick: () => {
+      if (hasSave && onLoad) onLoad();
+    },
+    disabled: !hasSave,
     style: {
       padding: "12px",
-      fontSize: 12
+      fontSize: 12,
+      opacity: hasSave ? 1 : 0.45,
+      cursor: hasSave ? "crosshair" : "not-allowed"
     }
-  }, "LOAD WORLD"), /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    style: {
-      padding: "12px",
-      fontSize: 12
-    }
-  }, "SETTINGS")), /*#__PURE__*/React.createElement("div", {
+  }, hasSave ? "▶ LOAD SAVED WORLD" : "NO SAVE FOUND"), /*#__PURE__*/React.createElement("div", {
     className: "mono dim",
     style: {
       fontSize: 10,
@@ -295,6 +291,6 @@ function MainMenu({
       textAlign: "center",
       marginTop: 4
     }
-  }, "\u2591 LAST RUN: 06 DAYS / KILLED BY TROLL \u2591")));
+  }, hasSave ? "░ AUTOSAVE EVERY 30s ░ PROGRESS WILL CARRY ░" : "░ START A FRESH RUN — NO SAVE ON DISK ░")));
 }
 window.MainMenu = MainMenu;

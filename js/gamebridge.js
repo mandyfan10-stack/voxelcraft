@@ -34,6 +34,7 @@ window.GameBridge = (function () {
     deathCause: 'walker',
     mineProgress: 0,
     lootOpen: null,   // { id, slots } when a loot container is open
+    hasSave: false,
   };
 
   function on(event, fn) {

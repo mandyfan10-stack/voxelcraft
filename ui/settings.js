@@ -5,8 +5,8 @@ function Settings({
   onMenu
 }) {
   const [tab, setTab] = React.useState("GRAPHICS");
-  const [fov, setFov] = React.useState(78);
-  const [renderDist, setRenderDist] = React.useState(8);
+  const [fov, setFov] = React.useState(75);
+  const [renderDist, setRenderDist] = React.useState(4);
   const [resolution, setResolution] = React.useState("1920×1080");
   const [shadows, setShadows] = React.useState("HIGH");
   const [master, setMaster] = React.useState(72);
@@ -153,14 +153,20 @@ function Settings({
     min: 60,
     max: 120,
     unit: "\xB0",
-    onChange: setFov
+    onChange: v => {
+      setFov(v);
+      window.GameBridge.emit("setFov", v);
+    }
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "RENDER DISTANCE",
     value: renderDist,
     min: 2,
     max: 16,
     unit: " CHUNKS",
-    onChange: setRenderDist
+    onChange: v => {
+      setRenderDist(v);
+      window.GameBridge.emit("setRenderDist", v);
+    }
   }), /*#__PURE__*/React.createElement(RadioRow, {
     label: "RESOLUTION",
     value: resolution,
@@ -274,7 +280,10 @@ function Settings({
   }), /*#__PURE__*/React.createElement(ToggleRow, {
     label: "AUTO-SAVE",
     value: autoSave,
-    onChange: setAutoSave
+    onChange: v => {
+      setAutoSave(v);
+      window.GameBridge.emit("setAutoSave", v);
+    }
   }), /*#__PURE__*/React.createElement(ToggleRow, {
     label: "SHOW DAMAGE NUMBERS",
     value: true,

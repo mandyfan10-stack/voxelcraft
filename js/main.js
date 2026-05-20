@@ -11,8 +11,11 @@ import { playerState, addXp, xpForLevel } from './playerstate.js';
 import { initCommands } from './commands.js';
 import { getItem, itemMeta, dropForBlock } from './items.js';
 import { RECIPES } from './crafting.js';
-import { maybeSpawnCrate, findCrateNear } from './crates.js';
+import { maybeSpawnCrate, findCrateNear, crates, clearCrates, loadCrate, setNextCrateId, setCratedChunks } from './crates.js';
 import { initAudio, unlockAudio, startAmbient, updateAmbient } from './audio.js';
+import { saveGame, hasSave, readSave } from './save.js';
+import { editedBlocks } from './world.js';
+import { mobs } from './entities.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
 
@@ -182,8 +185,11 @@ function movePlayerY(amt) {
 
 // ── Chunk management ─────────────────────────────────────────────────────────
 
-const RENDERING_DISTANCE = 4;
+let RENDERING_DISTANCE = 4;
 let lastChunkUpdate = 0;
+let autoSaveEnabled = true;
+let autoSaveAcc = 0;
+const AUTOSAVE_INTERVAL = 30;   // seconds
 const chunkQueue = [];
 
 function updateChunks() {
@@ -305,6 +311,72 @@ function updateHUD() {
     deathCause:  player.lastAttacker,
     mineProgress: mining ? mining.progress : 0,
   });
+}
+
+// ── Save / load ──────────────────────────────────────────────────────────────
+
+function clearWorld() {
+  for (const mesh of chunkMeshes.values()) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+  chunkMeshes.clear();
+  worldData.clear();
+  dirtyChunks.clear();
+  editedBlocks.clear();
+  chunkQueue.length = 0;
+  while (mobs.length > 0) { scene.remove(mobs.pop()); }
+  clearCrates(scene);
+}
+
+function loadGameFromSave() {
+  const save = readSave();
+  if (!save) return false;
+
+  clearWorld();
+  for (const [k, id] of save.editedBlocks) editedBlocks.set(k, id);
+  setCratedChunks(save.cratedChunks);
+  setNextCrateId(save.nextCrateId || 1);
+
+  // Player
+  player.pos.set(save.player.x, save.player.y, save.player.z);
+  player.yaw = save.player.yaw; player.pitch = save.player.pitch;
+  player.hp = save.player.hp; player.hunger = save.player.hunger; player.stamina = save.player.stamina;
+  player.lastAttacker = save.player.lastAttacker || 'walker';
+  player.dead = false;
+  player.vel.set(0, 0, 0);
+
+  // Player state
+  const ps = save.playerState;
+  playerState.selIdx = ps.selIdx || 0;
+  playerState.xp = ps.xp || 0;
+  playerState.level = ps.level || 1;
+  playerState.thirst = ps.thirst ?? 100;
+  playerState.maxHp = ps.maxHp || 100;
+  playerState.perks = Object.assign({ miningSpeed: 1, meleeDmg: 1 }, ps.perks);
+  playerState.stats = Object.assign({ kills: 0, blocksMined: 0, blocksPlaced: 0, deaths: 0 }, ps.stats);
+  playerState.inventory.deserialize(ps.inventory);
+
+  // Cycle
+  Object.assign(cycle, save.cycle);
+
+  // Crates
+  for (const cdata of save.crates) loadCrate(scene, cdata);
+
+  // Regenerate world around new player position
+  updateChunks();
+  while (chunkQueue.length > 0) processChunkQueue();
+
+  // Re-spawn the initial mobs
+  spawnMobs(scene);
+
+  // Latch state and refresh UI
+  window.GameBridge.setState({ started: true, hasSave: true });
+  pushInventory();
+  _lastLevel = playerState.level;
+  _lastBloodMoon = cycle.isBloodMoon;
+  return true;
 }
 
 // ── Mining (hold LMB) ─────────────────────────────────────────────────────────
@@ -435,6 +507,15 @@ function update(dt) {
 
   lastChunkUpdate += dt;
   if (lastChunkUpdate > .2) { updateChunks(); lastChunkUpdate = 0; }
+
+  // Autosave on a timer once gameplay is rolling.
+  if (autoSaveEnabled) {
+    autoSaveAcc += dt;
+    if (autoSaveAcc >= AUTOSAVE_INTERVAL) {
+      autoSaveAcc = 0;
+      if (saveGame()) window.GameBridge.setState({ hasSave: true });
+    }
+  }
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────────
@@ -466,10 +547,19 @@ updateChunks();
 while (chunkQueue.length > 0) processChunkQueue();
 player.pos.set(0, groundY(0, 0) + 3, 0);
 
-// ── Inventory / crafting / audio wiring ────────────────────────────────────
+// ── Inventory / crafting / audio / save wiring ─────────────────────────────
 initCommands(pushInventory);
 initAudio();
-window.GameBridge.setState({ itemMeta: itemMeta(), recipeMeta: RECIPES });
+window.GameBridge.setState({ itemMeta: itemMeta(), recipeMeta: RECIPES, hasSave: hasSave() });
+
+// React → game commands for the meta layer (menu/settings).
+window.GameBridge.on('loadGame', () => loadGameFromSave());
+window.GameBridge.on('setAutoSave', (v) => { autoSaveEnabled = !!v; });
+window.GameBridge.on('setRenderDist', (v) => { RENDERING_DISTANCE = Math.max(2, Math.min(16, v|0)); });
+window.GameBridge.on('setFov', (v) => {
+  camera.fov = Math.max(50, Math.min(120, v|0));
+  camera.updateProjectionMatrix();
+});
 playerState.inventory.add('wood_pickaxe', 1);
 playerState.inventory.add('wood_club', 1);
 playerState.inventory.add('cooked_meat', 3);

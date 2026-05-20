@@ -86,7 +86,29 @@ export function getCrateById(id) {
   return crates.find(c => c.id === id) || null;
 }
 
-// Used by save/load (Phase 8) — currently just a hook.
+// ── Save/load hooks ──────────────────────────────────────────────────────────
+
 export function serializeCrates() {
-  return crates.map(c => ({ id: c.id, type: c.type, pos: c.pos, contents: c.contents }));
+  return crates.map(c => ({ id: c.id, type: c.type, pos: c.pos.slice(), contents: c.contents.map(x => ({ ...x })) }));
+}
+export function getNextCrateId()       { return nextCrateId; }
+export function setNextCrateId(n)      { nextCrateId = n; }
+export function getCratedChunks()      { return cratedChunks; }
+export function setCratedChunks(list) {
+  cratedChunks.clear();
+  if (Array.isArray(list)) for (const k of list) cratedChunks.add(k);
+}
+export function clearCrates(scene) {
+  for (const c of crates) scene.remove(c.mesh);
+  crates.length = 0;
+  nextCrateId = 1;
+}
+export function loadCrate(scene, data) {
+  const mesh = makeCrateMesh(data.type);
+  mesh.position.set(data.pos[0], data.pos[1], data.pos[2]);
+  scene.add(mesh);
+  const c = { id: data.id, type: data.type, mesh, contents: data.contents.slice(), pos: data.pos.slice() };
+  crates.push(c);
+  if (data.id >= nextCrateId) nextCrateId = data.id + 1;
+  return c;
 }

@@ -1,6 +1,6 @@
 // main-menu.jsx — Main Menu screen with worn survival aesthetic + countdown dread.
 
-function MainMenu({ onStart }) {
+function MainMenu({ onStart, onLoad, hasSave }) {
   const [difficulty, setDifficulty] = React.useState("HARD");
   const [seed, setSeed] = React.useState("BLOODMOON-7724");
 
@@ -186,13 +186,17 @@ function MainMenu({ onStart }) {
           ▶ START SURVIVAL
         </button>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <button className="btn" style={{ padding: "12px", fontSize: 12 }}>LOAD WORLD</button>
-          <button className="btn" style={{ padding: "12px", fontSize: 12 }}>SETTINGS</button>
-        </div>
+        <button
+          className="btn"
+          onClick={() => { if (hasSave && onLoad) onLoad(); }}
+          disabled={!hasSave}
+          style={{ padding: "12px", fontSize: 12, opacity: hasSave ? 1 : 0.45, cursor: hasSave ? "crosshair" : "not-allowed" }}
+        >
+          {hasSave ? "▶ LOAD SAVED WORLD" : "NO SAVE FOUND"}
+        </button>
 
         <div className="mono dim" style={{ fontSize: 10, letterSpacing: "0.18em", textAlign: "center", marginTop: 4 }}>
-          ░ LAST RUN: 06 DAYS / KILLED BY TROLL ░
+          {hasSave ? "░ AUTOSAVE EVERY 30s ░ PROGRESS WILL CARRY ░" : "░ START A FRESH RUN — NO SAVE ON DISK ░"}
         </div>
       </div>
     </div>

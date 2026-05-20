@@ -2,8 +2,8 @@
 
 function Settings({ onResume, onMenu }) {
   const [tab, setTab] = React.useState("GRAPHICS");
-  const [fov, setFov] = React.useState(78);
-  const [renderDist, setRenderDist] = React.useState(8);
+  const [fov, setFov] = React.useState(75);
+  const [renderDist, setRenderDist] = React.useState(4);
   const [resolution, setResolution] = React.useState("1920×1080");
   const [shadows, setShadows] = React.useState("HIGH");
 
@@ -99,8 +99,12 @@ function Settings({ onResume, onMenu }) {
 
           {tab === "GRAPHICS" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <SliderRow label="FIELD OF VIEW" value={fov} min={60} max={120} unit="°" onChange={setFov} />
-              <SliderRow label="RENDER DISTANCE" value={renderDist} min={2} max={16} unit=" CHUNKS" onChange={setRenderDist} />
+              <SliderRow label="FIELD OF VIEW" value={fov}
+                min={60} max={120} unit="°"
+                onChange={(v) => { setFov(v); window.GameBridge.emit("setFov", v); }} />
+              <SliderRow label="RENDER DISTANCE" value={renderDist}
+                min={2} max={16} unit=" CHUNKS"
+                onChange={(v) => { setRenderDist(v); window.GameBridge.emit("setRenderDist", v); }} />
               <RadioRow label="RESOLUTION" value={resolution} options={["1280×720", "1920×1080", "2560×1440", "3840×2160"]} onChange={setResolution} />
               <RadioRow label="SHADOW QUALITY" value={shadows} options={["OFF", "LOW", "MED", "HIGH"]} onChange={setShadows} />
               <RadioRow label="MOTION BLUR" value="OFF" options={["OFF", "LIGHT", "HEAVY"]} onChange={() => {}} />
@@ -136,7 +140,8 @@ function Settings({ onResume, onMenu }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <RadioRow label="DIFFICULTY" value={difficulty} options={["NORMAL", "HARD", "HARDCORE"]} onChange={setDifficulty} />
               <ToggleRow label="FRIENDLY FIRE" value={friendlyFire} onChange={setFriendlyFire} />
-              <ToggleRow label="AUTO-SAVE" value={autoSave} onChange={setAutoSave} />
+              <ToggleRow label="AUTO-SAVE" value={autoSave}
+                onChange={(v) => { setAutoSave(v); window.GameBridge.emit("setAutoSave", v); }} />
               <ToggleRow label="SHOW DAMAGE NUMBERS" value={true} onChange={() => {}} />
               <ToggleRow label="MOTION SICKNESS REDUCTION" value={false} onChange={() => {}} />
               <RadioRow label="HORDE FREQUENCY" value="EVERY 5 DAYS" options={["EVERY 3 DAYS", "EVERY 5 DAYS", "EVERY 7 DAYS"]} onChange={() => {}} />

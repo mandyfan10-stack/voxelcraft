@@ -11,8 +11,9 @@ const DISTRESS = {
   scanlines: 0.12 // scanline opacity — was 0.5, main visibility killer
 };
 function App() {
-  const [screen, setScreen] = React.useState("menu"); // menu | hud | inventory | settings | death
+  const [screen, setScreen] = React.useState("menu"); // menu | hud | inventory | loot | settings | death
   const [hordeActive, setHordeActive] = React.useState(false);
+  const [hasSave, setHasSave] = React.useState(!!window.GameBridge.state.hasSave);
 
   // Apply the distress CSS variables once
   React.useEffect(() => {
@@ -28,6 +29,7 @@ function App() {
     const onDeath = () => setScreen("death");
     const onState = s => {
       setHordeActive(!!s.hordeActive);
+      setHasSave(!!s.hasSave);
       // Opening a loot crate is event-like — react when lootOpen flips on.
       if (s.lootOpen) {
         setScreen(prev => prev === "loot" ? prev : "loot");
@@ -45,6 +47,10 @@ function App() {
     window.GameBridge.setState({
       started: true
     });
+    setScreen("hud");
+  }
+  function handleLoad() {
+    window.GameBridge.emit("loadGame");
     setScreen("hud");
   }
   function handleRespawn() {
@@ -91,7 +97,9 @@ function App() {
     onOpenSettings: () => setScreen("settings"),
     onDie: () => setScreen("death")
   }), screen === "menu" && /*#__PURE__*/React.createElement(MainMenu, {
-    onStart: handleStart
+    onStart: handleStart,
+    onLoad: handleLoad,
+    hasSave: hasSave
   }), screen === "inventory" && /*#__PURE__*/React.createElement(Inventory, {
     onClose: () => setScreen("hud")
   }), screen === "loot" && /*#__PURE__*/React.createElement(Loot, {
