@@ -32,6 +32,7 @@ window.GameBridge = (function () {
     perks: { miningSpeed: 1, meleeDmg: 1 },
     stats: { kills: 0, blocksMined: 0, blocksPlaced: 0, deaths: 0 },
     deathCause: 'walker',
+    mineProgress: 0,
     lootOpen: null,   // { id, slots } when a loot container is open
   };
 

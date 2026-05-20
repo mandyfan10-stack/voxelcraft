@@ -2,7 +2,8 @@ import * as THREE from './vendor/three.module.js';
 import { CHUNK_SIZE, PLAYER_CONFIG,
          SPRINT_SPEED_MULT, STAMINA_MAX, STAMINA_SPRINT_DRAIN, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
          HUNGER_MAX, HUNGER_DRAIN_RATE, HUNGER_STARVATION_DMG,
-         THIRST_MAX, THIRST_DRAIN_RATE, THIRST_DEHYDRATION_DMG } from './config.js';
+         THIRST_MAX, THIRST_DRAIN_RATE, THIRST_DEHYDRATION_DMG,
+         BLOCK_HARDNESS, HAND_MINE_SPEED } from './config.js';
 import { worldData, chunkMeshes, dirtyChunks, getChunkKey, genChunk, makeChunkMesh, setBlockAt, getBlockAt } from './world.js';
 import { player, raycast, checkCollision, spawnMobs, spawnHordeMob, spawnHordeWave, updateMobs, groundY, resetGame, meleeAttack, getMobBlips } from './entities.js';
 import { cycle, updateCycle, getAtmosphere, getSunDirection } from './daynight.js';
@@ -35,6 +36,8 @@ const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1
 
 const keys = { w: 0, a: 0, s: 0, d: 0, j: 0, shift: 0 };
 let locked = false;
+let lmbDown = false;            // hold-to-mine state
+let mining = null;              // { x, y, z, progress } while breaking a block
 
 addEventListener('keydown', e => {
   const c = e.code;
@@ -89,7 +92,10 @@ cvs.addEventListener('webglcontextlost', (e) => {
 }, false);
 cvs.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
 
-document.addEventListener('pointerlockchange', () => locked = document.pointerLockElement === cvs);
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === cvs;
+  if (!locked) { lmbDown = false; mining = null; }
+});
 
 document.addEventListener('mousemove', e => {
   if (locked && !player.dead) {
@@ -102,21 +108,9 @@ document.addEventListener('mousemove', e => {
 cvs.addEventListener('mousedown', e => {
   if (!locked || player.dead) return;
   if (e.button === 0) {
-    // Melee a nearby zombie first; otherwise mine the targeted block.
-    if (meleeAttack()) {
-      pushInventory();   // weapon durability / zombie loot may have changed
-    } else {
-      const r = raycast(camera);
-      if (r) {
-        const bid = getBlockAt(...r.hit);
-        setBlockAt(...r.hit, 0);
-        const drop = dropForBlock(bid);
-        if (drop) playerState.inventory.add(drop, 1);
-        playerState.stats.blocksMined++;
-        addXp(1);
-        pushInventory();
-      }
-    }
+    lmbDown = true;
+    // Snap an instant swing so the very first click feels responsive.
+    if (meleeAttack()) { mining = null; pushInventory(); }
   }
   if (e.button === 2) {
     const slot = playerState.inventory.slots[playerState.selIdx];
@@ -131,6 +125,10 @@ cvs.addEventListener('mousedown', e => {
       pushInventory();
     }
   }
+});
+
+cvs.addEventListener('mouseup', e => {
+  if (e.button === 0) { lmbDown = false; mining = null; }
 });
 
 // ── Movement ─────────────────────────────────────────────────────────────────
@@ -281,7 +279,63 @@ function updateHUD() {
     perks:       playerState.perks,
     stats:       playerState.stats,
     deathCause:  player.lastAttacker,
+    mineProgress: mining ? mining.progress : 0,
   });
+}
+
+// ── Mining (hold LMB) ─────────────────────────────────────────────────────────
+
+function updateMining(dt) {
+  if (!lmbDown || player.dead || !locked) {
+    if (mining) mining = null;
+    return;
+  }
+  // A connecting swing pre-empts mining this frame.
+  if (meleeAttack()) {
+    mining = null;
+    pushInventory();
+    return;
+  }
+  const r = raycast(camera);
+  if (!r) { mining = null; return; }
+  const bid = getBlockAt(...r.hit);
+  const hardness = BLOCK_HARDNESS[bid];
+  if (!bid || hardness === undefined || hardness > 100) { mining = null; return; }
+
+  const slot = playerState.inventory.slots[playerState.selIdx];
+  const item = slot ? getItem(slot.id) : null;
+  let toolSpeed = HAND_MINE_SPEED;
+  let typeMult = 1;
+  if (item && item.tool) {
+    toolSpeed = item.tool.speed;
+    if (item.tool.type === 'axe') {
+      if (bid === 4 || bid === 6) typeMult = 1.6;         // wood, leaves
+      else if (bid === 3 || bid === 9) typeMult = 0.45;   // stone, concrete
+    } else if (item.tool.type === 'pickaxe') {
+      if (bid === 3 || bid === 9 || bid === 5) typeMult = 1.6;   // stone-like
+      else if (bid === 4 || bid === 6) typeMult = 0.55;          // wood/leaves
+    }
+  }
+  const rate = (toolSpeed * typeMult * (playerState.perks.miningSpeed || 1)) / hardness;
+
+  if (!mining || mining.x !== r.hit[0] || mining.y !== r.hit[1] || mining.z !== r.hit[2]) {
+    mining = { x: r.hit[0], y: r.hit[1], z: r.hit[2], progress: 0 };
+  }
+  mining.progress += dt * rate;
+
+  if (mining.progress >= 1) {
+    setBlockAt(mining.x, mining.y, mining.z, 0);
+    const drop = dropForBlock(bid);
+    if (drop) playerState.inventory.add(drop, 1);
+    playerState.stats.blocksMined++;
+    addXp(1);
+    if (slot && slot.durability !== undefined && item && item.tool) {
+      slot.durability -= 1;
+      if (slot.durability <= 0) playerState.inventory.slots[playerState.selIdx] = null;
+    }
+    pushInventory();
+    mining = null;
+  }
 }
 
 // ── Game update ───────────────────────────────────────────────────────────────
@@ -351,6 +405,7 @@ function update(dt) {
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
 
+  updateMining(dt);
   updateMobs(dt);
 
   lastChunkUpdate += dt;

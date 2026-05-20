@@ -22,6 +22,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
   const [levelXp, setLevelXp] = React.useState(0);
   const [nextLevelXp, setNextLevelXp] = React.useState(0);
   const [isBloodMoon, setIsBloodMoon] = React.useState(false);
+  const [mineProgress, setMineProgress] = React.useState(0);
 
   // Visual effects state
   const [damageFlash, setDamageFlash] = React.useState(0); // 0-1 intensity
@@ -67,6 +68,7 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
       setLevelXp(s.levelXp ?? 0);
       setNextLevelXp(s.nextLevelXp ?? 0);
       setIsBloodMoon(!!s.isBloodMoon);
+      setMineProgress(s.mineProgress ?? 0);
       if (s.selIdx !== undefined) setSelectedSlot(s.selIdx);
     };
     window.GameBridge.on('state', handler);
@@ -267,6 +269,23 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
           <div style={{ position: "absolute", left: -1, bottom: -10, width: 2, height: 7, background: "rgba(255,255,255,0.9)", boxShadow: "0 0 3px rgba(0,0,0,0.8)" }} />
           {/* center dot */}
           <div style={{ position: "absolute", left: -1.5, top: -1.5, width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.95)" }} />
+          {/* mining progress bar below the crosshair */}
+          {mineProgress > 0 && (
+            <div style={{
+              position: "absolute", left: -42, top: 16,
+              width: 84, height: 5,
+              background: "rgba(0,0,0,0.65)",
+              border: "1px solid var(--steel-2)",
+              boxShadow: "0 0 6px rgba(0,0,0,0.7)",
+            }}>
+              <div style={{
+                height: "100%",
+                width: Math.min(100, mineProgress * 100) + "%",
+                background: "linear-gradient(90deg, var(--olive) 0%, var(--cyan) 100%)",
+                boxShadow: "0 0 6px rgba(0,255,255,0.4)",
+              }} />
+            </div>
+          )}
         </div>
       )}
 
