@@ -16,18 +16,19 @@ import { initAudio, unlockAudio, startAmbient, updateAmbient } from './audio.js'
 import { saveGame, hasSave, readSave } from './save.js';
 import { editedBlocks } from './world.js';
 import { mobs } from './entities.js';
+import { IS_TOUCH } from './touch.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
 
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.4));
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1.0 : 1.4));
 renderer.setSize(innerWidth, innerHeight);
 
 // ── Scene & Lighting ─────────────────────────────────────────────────────────
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x4a5c28);
-scene.fog = new THREE.Fog(0x4a5c28, 22, 55);
+scene.fog = new THREE.Fog(0x4a5c28, 22, IS_TOUCH ? 36 : 55);
 
 const hemiLight = new THREE.HemisphereLight(0x8fa055, 0x4a3a25, 0.9);
 scene.add(hemiLight);
@@ -35,7 +36,7 @@ const sun = new THREE.DirectionalLight(0xffe8b0, 0.75);
 sun.position.set(20, 40, 10);
 scene.add(sun);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, IS_TOUCH ? 60 : 100);
 
 // ── Input ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,38 @@ const keys = { w: 0, a: 0, s: 0, d: 0, j: 0, shift: 0 };
 let locked = false;
 let lmbDown = false;            // hold-to-mine state
 let mining = null;              // { x, y, z, progress } while breaking a block
+let lookFinger = null;          // touch identifier currently driving the camera
+let lookLastX = 0, lookLastY = 0;
+let _lastPlaceTick = 0;         // monotonically-incremented by ui/touch.jsx
+let _lastInteractTick = 0;
+
+// Helpers shared by keyboard (E / RMB) and touch (PLACE / E action buttons).
+function tryPlaceBlock() {
+  const slot = playerState.inventory.slots[playerState.selIdx];
+  if (!slot) return;
+  const item = getItem(slot.id);
+  if (!item || !item.place) return;
+  const r = raycast(camera);
+  if (r && r.prev) {
+    setBlockAt(...r.prev, item.blockId);
+    playerState.inventory.removeAt(playerState.selIdx, 1);
+    playerState.stats.blocksPlaced++;
+    pushInventory();
+  }
+}
+function tryInteract() {
+  const crate = findCrateNear(player.pos.x, player.pos.y + 1, player.pos.z, 2.6);
+  if (crate) {
+    window.GameBridge.setState({ lootOpen: { id: crate.id, type: crate.type, contents: crate.contents.slice() } });
+    if (document.pointerLockElement) document.exitPointerLock();
+    return;
+  }
+  const r = raycast(camera);
+  if (r && getBlockAt(...r.hit) === 7) {
+    playerState.thirst = Math.min(THIRST_MAX, playerState.thirst + 22);
+    window.GameBridge?.emit('drink');
+  }
+}
 
 addEventListener('keydown', e => {
   const c = e.code;
@@ -53,20 +86,7 @@ addEventListener('keydown', e => {
   else if (c === 'Space')     keys.j = 1;
   else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
   else if (c === 'KeyE') {
-    if (locked && !player.dead) {
-      // Loot crate within reach takes priority over drinking.
-      const crate = findCrateNear(player.pos.x, player.pos.y + 1, player.pos.z, 2.6);
-      if (crate) {
-        window.GameBridge.setState({ lootOpen: { id: crate.id, type: crate.type, contents: crate.contents.slice() } });
-        if (document.pointerLockElement) document.exitPointerLock();
-      } else {
-        const r = raycast(camera);
-        if (r && getBlockAt(...r.hit) === 7) {
-          playerState.thirst = Math.min(THIRST_MAX, playerState.thirst + 22);
-          window.GameBridge?.emit('drink');
-        }
-      }
-    }
+    if (locked && !player.dead) tryInteract();
   }
   else if (e.key >= '1' && e.key <= '8') { playerState.selIdx = +e.key - 1; pushInventory(); }
 });
@@ -95,11 +115,17 @@ window.GameBridge.on('respawn', () => { resetGame(); });
 
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => {
-  if (!player.dead && window.GameBridge.state.started) {
-    cvs.requestPointerLock();
-    // Autoplay policy: AudioContext only unlocks on a user gesture.
-    unlockAudio();
-    startAmbient();
+  if (player.dead || !window.GameBridge.state.started) return;
+  // Audio unlock + ambient first (works for both mouse and touch via touchend → click).
+  unlockAudio();
+  startAmbient();
+  // Keep the screen on while playing (no-op on browsers without Wake Lock).
+  try { navigator.wakeLock?.request('screen').catch(() => {}); } catch { /* ignore */ }
+  if (IS_TOUCH) {
+    // No pointer lock on touch — taps drive look directly via touch events.
+    locked = true;
+  } else {
+    try { cvs.requestPointerLock(); } catch { /* ignore */ }
   }
 });
 
@@ -110,9 +136,56 @@ cvs.addEventListener('webglcontextlost', (e) => {
 cvs.addEventListener('webglcontextrestored', () => { location.reload(); }, false);
 
 document.addEventListener('pointerlockchange', () => {
+  if (IS_TOUCH) return;   // touch never enters pointer lock — ignore.
   locked = document.pointerLockElement === cvs;
   if (!locked) { lmbDown = false; mining = null; }
 });
+
+// On touch, an open overlay (inventory / settings / loot / menu / death) freezes input.
+if (IS_TOUCH) {
+  window.GameBridge.on('uiOverlay', (open) => {
+    locked = !open && !!window.GameBridge.state.started && !player.dead;
+    if (open) { lmbDown = false; mining = null; lookFinger = null; }
+  });
+}
+
+// Drag-to-look on the canvas (touch). One finger owns the look at a time.
+cvs.addEventListener('touchstart', (e) => {
+  if (!locked || player.dead) return;
+  if (lookFinger !== null) return;
+  const t = e.changedTouches[0];
+  lookFinger = t.identifier;
+  lookLastX = t.clientX;
+  lookLastY = t.clientY;
+  e.preventDefault();
+}, { passive: false });
+
+cvs.addEventListener('touchmove', (e) => {
+  if (lookFinger === null) return;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier !== lookFinger) continue;
+    const dx = t.clientX - lookLastX;
+    const dy = t.clientY - lookLastY;
+    lookLastX = t.clientX;
+    lookLastY = t.clientY;
+    if (locked && !player.dead) {
+      player.yaw -= dx * 0.005;
+      player.pitch = Math.max(-1.52, Math.min(1.52, player.pitch - dy * 0.005));
+    }
+    e.preventDefault();
+    return;
+  }
+}, { passive: false });
+
+function endLookTouch(e) {
+  if (lookFinger === null) return;
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === lookFinger) { lookFinger = null; return; }
+  }
+}
+cvs.addEventListener('touchend', endLookTouch);
+cvs.addEventListener('touchcancel', endLookTouch);
 
 document.addEventListener('mousemove', e => {
   if (locked && !player.dead) {
@@ -129,19 +202,7 @@ cvs.addEventListener('mousedown', e => {
     // Snap an instant swing so the very first click feels responsive.
     if (meleeAttack()) { mining = null; pushInventory(); }
   }
-  if (e.button === 2) {
-    const slot = playerState.inventory.slots[playerState.selIdx];
-    if (!slot) return;
-    const item = getItem(slot.id);
-    if (!item || !item.place) return;
-    const r = raycast(camera);
-    if (r && r.prev) {
-      setBlockAt(...r.prev, item.blockId);
-      playerState.inventory.removeAt(playerState.selIdx, 1);
-      playerState.stats.blocksPlaced++;
-      pushInventory();
-    }
-  }
+  if (e.button === 2) tryPlaceBlock();
 });
 
 cvs.addEventListener('mouseup', e => {
@@ -185,7 +246,7 @@ function movePlayerY(amt) {
 
 // ── Chunk management ─────────────────────────────────────────────────────────
 
-let RENDERING_DISTANCE = 4;
+let RENDERING_DISTANCE = IS_TOUCH ? 3 : 4;
 let lastChunkUpdate = 0;
 let autoSaveEnabled = true;
 let autoSaveAcc = 0;
@@ -446,9 +507,27 @@ function update(dt) {
   });
   updateHUD();
 
+  // Merge touch input every frame (cheap; only on touch devices).
+  if (IS_TOUCH && window.MobileInput) {
+    lmbDown = !!window.MobileInput.mine;
+    if (window.MobileInput.placeTick !== _lastPlaceTick) {
+      _lastPlaceTick = window.MobileInput.placeTick;
+      if (locked && !player.dead) tryPlaceBlock();
+    }
+    if (window.MobileInput.interactTick !== _lastInteractTick) {
+      _lastInteractTick = window.MobileInput.interactTick;
+      if (locked && !player.dead) tryInteract();
+    }
+  }
+
   wish.set(0, 0, 0);
   if (!player.dead) {
     let ix = keys.d - keys.a, iz = keys.w - keys.s;
+    if (IS_TOUCH && window.MobileInput) {
+      // Joystick replaces W/A/S/D (which are always 0 on touch).
+      ix = window.MobileInput.mx;
+      iz = -window.MobileInput.mz;
+    }
     const len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; }
     fw.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
@@ -457,10 +536,13 @@ function update(dt) {
     wish.addScaledVector(rt, ix);
 
     const moving = len > 0.01;
-    const sprinting = keys.shift && moving && player.stamina > 0;
+    // Touch auto-sprints when the joystick is pushed past 95% — no separate sprint button.
+    const sprintWanted = keys.shift || (IS_TOUCH && len > 0.95);
+    const sprinting = sprintWanted && moving && player.stamina > 0;
     const speedMult = sprinting ? SPRINT_SPEED_MULT : 1.0;
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(PLAYER_CONFIG.speed * speedMult * Math.min(len, 1));
-    if (player.onG && keys.j) { player.vel.y = PLAYER_CONFIG.jumpForce; player.onG = false; }
+    const jumpPressed = !!keys.j || (IS_TOUCH && !!window.MobileInput?.jump);
+    if (player.onG && jumpPressed) { player.vel.y = PLAYER_CONFIG.jumpForce; player.onG = false; }
 
     // Stamina: drain while sprinting, regen after STAMINA_REGEN_DELAY seconds of rest
     if (sprinting) {

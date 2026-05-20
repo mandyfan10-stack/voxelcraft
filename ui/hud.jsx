@@ -230,19 +230,48 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
         </div>
       </div>
 
-      {/* ── Bottom-left: action prompts ──────────────────────────── */}
-      <div style={{
-        position: "absolute", left: 24, bottom: 28,
-        pointerEvents: "auto",
-        display: "flex", flexDirection: "column", gap: 6,
-      }}>
-        <div className="mono dim" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
-          <span className="kbd">LMB</span> MINE   <span className="kbd">RMB</span> PLACE   <span className="kbd">SHIFT</span> SPRINT
+      {/* ── Bottom-left: action prompts (desktop only) ───────────── */}
+      {!window.IS_TOUCH && (
+        <div style={{
+          position: "absolute", left: 24, bottom: 28,
+          pointerEvents: "auto",
+          display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <div className="mono dim" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
+            <span className="kbd">LMB</span> MINE   <span className="kbd">RMB</span> PLACE   <span className="kbd">SHIFT</span> SPRINT
+          </div>
+          <div className="mono dim" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
+            <span className="kbd">I</span> INVENTORY   <span className="kbd">ESC</span> PAUSE
+          </div>
         </div>
-        <div className="mono dim" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
-          <span className="kbd">I</span> INVENTORY   <span className="kbd">ESC</span> PAUSE
-        </div>
-      </div>
+      )}
+
+      {/* ── Touch controls: joystick + action buttons ────────────── */}
+      {window.IS_TOUCH && (
+        <>
+          <Joystick />
+          <div style={{
+            position: "fixed",
+            right: 24, bottom: 100,
+            display: "flex", flexDirection: "column",
+            gap: 14, alignItems: "center",
+            pointerEvents: "auto",
+            zIndex: 600,
+          }}>
+            <ActionButton label="MINE" kind="mine" hold big color="var(--blood-deep)"
+              onTick={null} />
+            <div style={{ display: "flex", gap: 12 }}>
+              <ActionButton label="PLACE" hold={false}
+                onTick={() => { window.MobileInput.placeTick++; }}
+                color="var(--olive)" />
+              <ActionButton label="E" hold={false}
+                onTick={() => { window.MobileInput.interactTick++; }}
+                color="var(--cyan-dim)" />
+            </div>
+            <ActionButton label="JUMP" kind="jump" hold color="var(--rust)" />
+          </div>
+        </>
+      )}
 
       {/* ── Bottom-right: clock / direction indicator ────────────── */}
       <div style={{
@@ -258,8 +287,8 @@ function HUD({ onOpenInventory, onOpenSettings, onDie, showMinimap, hordeAlert }
         </div>
       </div>
 
-      {/* ── Crosshair (only when pointer locked) ─────────────────── */}
-      {pointerLocked && (
+      {/* ── Crosshair (when pointer locked, or always on touch) ──── */}
+      {(pointerLocked || window.IS_TOUCH) && (
         <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none" }}>
           {/* horizontal */}
           <div style={{ position: "absolute", left: -10, top: -1, width: 7, height: 2, background: "rgba(255,255,255,0.9)", boxShadow: "0 0 3px rgba(0,0,0,0.8)" }} />

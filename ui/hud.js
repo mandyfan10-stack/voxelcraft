@@ -328,7 +328,7 @@ function HUD({
         color: i === selectedSlot ? "var(--cyan)" : "var(--bone-dim)"
       }
     }, i + 1));
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), !window.IS_TOUCH && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       left: 24,
@@ -360,7 +360,50 @@ function HUD({
     className: "kbd"
   }, "I"), " INVENTORY   ", /*#__PURE__*/React.createElement("span", {
     className: "kbd"
-  }, "ESC"), " PAUSE")), /*#__PURE__*/React.createElement("div", {
+  }, "ESC"), " PAUSE")), window.IS_TOUCH && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Joystick, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      right: 24,
+      bottom: 100,
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      alignItems: "center",
+      pointerEvents: "auto",
+      zIndex: 600
+    }
+  }, /*#__PURE__*/React.createElement(ActionButton, {
+    label: "MINE",
+    kind: "mine",
+    hold: true,
+    big: true,
+    color: "var(--blood-deep)",
+    onTick: null
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement(ActionButton, {
+    label: "PLACE",
+    hold: false,
+    onTick: () => {
+      window.MobileInput.placeTick++;
+    },
+    color: "var(--olive)"
+  }), /*#__PURE__*/React.createElement(ActionButton, {
+    label: "E",
+    hold: false,
+    onTick: () => {
+      window.MobileInput.interactTick++;
+    },
+    color: "var(--cyan-dim)"
+  })), /*#__PURE__*/React.createElement(ActionButton, {
+    label: "JUMP",
+    kind: "jump",
+    hold: true,
+    color: "var(--rust)"
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       right: 24,
@@ -382,7 +425,7 @@ function HUD({
       letterSpacing: "0.2em",
       marginTop: 2
     }
-  }, "\u2591 ", timeFracToPhase(timeFrac), " \u2591 ", mobBlips.length, " HOSTILE", mobBlips.length !== 1 ? "S" : "", " \u2591")), pointerLocked && /*#__PURE__*/React.createElement("div", {
+  }, "\u2591 ", timeFracToPhase(timeFrac), " \u2591 ", mobBlips.length, " HOSTILE", mobBlips.length !== 1 ? "S" : "", " \u2591")), (pointerLocked || window.IS_TOUCH) && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       left: "50%",

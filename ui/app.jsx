@@ -13,6 +13,35 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+function TopBarButton({ label, onPress }) {
+  return (
+    <button
+      onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); onPress(); }}
+      onClick={onPress}
+      style={{
+        minWidth: 56, height: 44,
+        padding: "0 12px",
+        appearance: "none",
+        border: "1px solid var(--steel-2)",
+        background: "linear-gradient(180deg, rgba(43,40,35,0.92) 0%, rgba(10,9,8,0.95) 100%)",
+        color: "var(--bone)",
+        fontFamily: "var(--display)",
+        fontSize: 14,
+        fontWeight: 800,
+        letterSpacing: "0.15em",
+        boxShadow: "inset 0 1px 0 rgba(216,210,196,0.08), 0 4px 12px rgba(0,0,0,0.7)",
+        touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTapHighlightColor: "transparent",
+        cursor: "crosshair",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function FatalErrorScreen({ message }) {
   return (
     <div style={{
@@ -97,6 +126,10 @@ function App() {
     if (screen !== "hud" && screen !== "menu" && screen !== "death") {
       if (document.pointerLockElement) document.exitPointerLock();
     }
+    // Mirror lock state to the game module for touch (no pointer lock there).
+    if (window.IS_TOUCH) {
+      window.GameBridge.emit("uiOverlay", screen !== "hud");
+    }
   }, [screen]);
 
   // Keyboard: I = inventory, ESC = pause / resume
@@ -140,6 +173,19 @@ function App() {
           onOpenSettings={() => setScreen("settings")}
           onDie={() => setScreen("death")}
         />
+      )}
+
+      {/* TopBar: INV / PAUSE buttons — touch only, replaces I and ESC. */}
+      {inGame && window.IS_TOUCH && screen === "hud" && (
+        <div style={{
+          position: "fixed", top: 16, right: 16,
+          display: "flex", gap: 10,
+          pointerEvents: "auto",
+          zIndex: 700,
+        }}>
+          <TopBarButton label="INV" onPress={() => setScreen("inventory")} />
+          <TopBarButton label="⏸" onPress={() => setScreen("settings")} />
+        </div>
       )}
 
       {screen === "menu" && <MainMenu onStart={handleStart} onLoad={handleLoad} hasSave={hasSave} />}

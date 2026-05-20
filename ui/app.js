@@ -25,6 +25,38 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+function TopBarButton({
+  label,
+  onPress
+}) {
+  return /*#__PURE__*/React.createElement("button", {
+    onTouchStart: e => {
+      e.preventDefault();
+      e.stopPropagation();
+      onPress();
+    },
+    onClick: onPress,
+    style: {
+      minWidth: 56,
+      height: 44,
+      padding: "0 12px",
+      appearance: "none",
+      border: "1px solid var(--steel-2)",
+      background: "linear-gradient(180deg, rgba(43,40,35,0.92) 0%, rgba(10,9,8,0.95) 100%)",
+      color: "var(--bone)",
+      fontFamily: "var(--display)",
+      fontSize: 14,
+      fontWeight: 800,
+      letterSpacing: "0.15em",
+      boxShadow: "inset 0 1px 0 rgba(216,210,196,0.08), 0 4px 12px rgba(0,0,0,0.7)",
+      touchAction: "none",
+      userSelect: "none",
+      WebkitUserSelect: "none",
+      WebkitTapHighlightColor: "transparent",
+      cursor: "crosshair"
+    }
+  }, label);
+}
 function FatalErrorScreen({
   message
 }) {
@@ -144,6 +176,10 @@ function App() {
     if (screen !== "hud" && screen !== "menu" && screen !== "death") {
       if (document.pointerLockElement) document.exitPointerLock();
     }
+    // Mirror lock state to the game module for touch (no pointer lock there).
+    if (window.IS_TOUCH) {
+      window.GameBridge.emit("uiOverlay", screen !== "hud");
+    }
   }, [screen]);
 
   // Keyboard: I = inventory, ESC = pause / resume
@@ -180,7 +216,23 @@ function App() {
     onOpenInventory: () => setScreen("inventory"),
     onOpenSettings: () => setScreen("settings"),
     onDie: () => setScreen("death")
-  }), screen === "menu" && /*#__PURE__*/React.createElement(MainMenu, {
+  }), inGame && window.IS_TOUCH && screen === "hud" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      top: 16,
+      right: 16,
+      display: "flex",
+      gap: 10,
+      pointerEvents: "auto",
+      zIndex: 700
+    }
+  }, /*#__PURE__*/React.createElement(TopBarButton, {
+    label: "INV",
+    onPress: () => setScreen("inventory")
+  }), /*#__PURE__*/React.createElement(TopBarButton, {
+    label: "\u23F8",
+    onPress: () => setScreen("settings")
+  })), screen === "menu" && /*#__PURE__*/React.createElement(MainMenu, {
     onStart: handleStart,
     onLoad: handleLoad,
     hasSave: hasSave
