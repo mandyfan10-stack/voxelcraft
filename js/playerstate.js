@@ -23,6 +23,7 @@ export const playerState = {
   thirst: THIRST_MAX,
   maxHp: PLAYER_MAX_HP,
   perks: { miningSpeed: 1, meleeDmg: 1 },
+  stats: { kills: 0, blocksMined: 0, blocksPlaced: 0, deaths: 0 },
 };
 
 // Award XP. Returns the number of levels gained (0 if none).
@@ -54,4 +55,5 @@ export function resetPlayerState() {
   playerState.thirst = THIRST_MAX;
   playerState.maxHp = PLAYER_MAX_HP;
   playerState.perks = { miningSpeed: 1, meleeDmg: 1 };
+  playerState.stats = { kills: 0, blocksMined: 0, blocksPlaced: 0, deaths: 0 };
 }

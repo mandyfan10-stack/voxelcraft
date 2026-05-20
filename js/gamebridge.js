@@ -30,6 +30,8 @@ window.GameBridge = (function () {
     itemMeta: {},
     recipeMeta: [],
     perks: { miningSpeed: 1, meleeDmg: 1 },
+    stats: { kills: 0, blocksMined: 0, blocksPlaced: 0, deaths: 0 },
+    deathCause: 'walker',
     lootOpen: null,   // { id, slots } when a loot container is open
   };
 

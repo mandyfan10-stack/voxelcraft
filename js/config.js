@@ -57,7 +57,7 @@ export const HUNGER_STARVATION_DMG = 5;   // HP/sec when hunger = 0
 // Combat
 export const MOB_MAX_HP           = 60;
 export const MELEE_RANGE          = 2.8;
-export const MELEE_DAMAGE         = 35;
+export const MELEE_DAMAGE         = 12;   // bare-handed; weapons override this
 export const MELEE_COOLDOWN       = 0.55; // sec between swings
 
 // Thirst

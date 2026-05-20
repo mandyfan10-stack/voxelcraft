@@ -3,67 +3,61 @@
 // 'M' = mouth, 'T' = tooth, '.' = empty.
 
 const CREATURE_PALETTES = {
-  troll: {
-    body: "#4a6b2a",
-    bodyShade: "#2a3d18",
-    face: "#a89274",
-    faceShade: "#6b5a44",
-    eye: "#d8d2c4",
-    eyeDot: "#0a0908",
-    mouth: "#3d2110",
-    tooth: "#d8d2c4"
+  walker: {
+    body: "#3a3526",
+    bodyShade: "#1f1c12",
+    face: "#7c8a55",
+    faceShade: "#4a5535",
+    eye: "#d9e0b0",
+    eyeDot: "#0a0a08",
+    mouth: "#240707",
+    tooth: "#bfb487"
+  },
+  runner: {
+    body: "#7c8a55",
+    bodyShade: "#4a5535",
+    face: "#8a7a5a",
+    faceShade: "#5a4a32",
+    eye: "#d9e0b0",
+    eyeDot: "#0a0a08",
+    mouth: "#240707",
+    tooth: "#bfb487"
   },
   brute: {
-    body: "#6b3b1f",
-    bodyShade: "#3d2110",
-    face: "#8a6a4c",
-    faceShade: "#4a3424",
-    eye: "#cc2200",
-    eyeDot: "#0a0908",
-    mouth: "#0a0908",
-    tooth: "#a89274"
+    body: "#232a36",
+    bodyShade: "#10141c",
+    face: "#7c8a55",
+    faceShade: "#4a5535",
+    eye: "#ffe066",
+    eyeDot: "#0a0a08",
+    mouth: "#0a0d12",
+    tooth: "#8a8a8a"
   },
-  husk: {
-    body: "#8a8473",
-    bodyShade: "#4a4640",
-    face: "#a89274",
-    faceShade: "#5a4838",
-    eye: "#00ffff",
-    eyeDot: "#0a0908",
-    mouth: "#1c1814",
-    tooth: "#d8d2c4"
-  },
-  fleshball: {
-    body: "#d8b0a0",
-    bodyShade: "#8a5a48",
-    face: "#d8a890",
-    faceShade: "#6b4838",
-    eye: "#d8d2c4",
-    eyeDot: "#0a0908",
-    mouth: "#cc2200",
-    tooth: "#d8d2c4"
+  screamer: {
+    body: "#b3ab93",
+    bodyShade: "#6b6555",
+    face: "#b3ab93",
+    faceShade: "#6b6555",
+    eye: "#ffe066",
+    eyeDot: "#0a0a08",
+    mouth: "#240707",
+    tooth: "#bfb487"
   }
 };
 
-// 14×14 patterns
+// 14×14 patterns — the four zombie archetypes
 const CREATURE_PATTERNS = {
-  // Fat bulbous troll, large grin, embedded human-ish face
-  troll: ["..............", "....XXXX......", "...XFFFFX.....", "..XFFFFFFX....", "..XFEEFFEEX...",
-  // eyes
-  "..XFFFFFFFX...", "..XFFMMMMFX...",
-  // mouth
-  "..XFMTMTMMX...",
-  // teeth
-  ".XXFFFFFFXXX..", "XXXXXXXXXXXXXX", "XXXXXXXXXXXXXX", "XXXXXXXXXXXXXX", ".XXXXXXXXXXXX.", "..XX......XX.."],
-  // Brute — taller, more menacing, broader shoulders
+  // Walker — gaunt upright zombie, one arm reaching
+  walker: ["....XXXXX.....", "...XFFFFFX....", "...XFEFEFX....", "...XFFFFFX....", "...XFMMMFX....", "....XFFFX.....", ".....XXX......", "X...XXXXXX....", "XX..XXXXXX....", ".X..XXFFXX....", "....XXXXXX....", "....XXX.XX....", "....XX..XX....", "....XX..XX...."],
+  // Runner — lean, lunging forward
+  runner: [".........XXX..", "........XFFFX.", "........XEEFX.", "........XFMFX.", ".......XXFFX..", "....XXXXXX....", "..XXXXXXX.....", ".XX.XXXX......", "XX..XXXX......", "....XXXX......", "...XX..XX.....", "..XX....XX....", ".XX......XX...", ".X........X..."],
+  // Brute — armored riot-cop tank, broad shoulders
   brute: ["..............", "...XX.....XX..", "..XFFXXXXXFX..", "..XFFFEEFFFX..", "..XXFFFFFFXX..", "..XXFMMMMFXX..", ".XXXXFFFFXXXX.", "XXXXXXXXXXXXXX", "XXXXXXXXXXXXXX", "XXXXXXXXXXXXXX", "XXXX.XXXX.XXXX", ".XX...XX...XX.", ".XX...XX...XX.", ".XX...XX...XX."],
-  // Husk — gaunt, skeletal, glowing eyes
-  husk: ["...XXXX.......", "..XFFFFX......", "..XFEEFX......", "..XFFFFX......", "..XFMMFX......", "...XXXX.......", "..XXXXXX......", ".XXX..XXX.....", ".XX....XX.....", ".XX....XX.....", ".XX....XX.....", "..XX..XX......", "...X..X.......", "..XX..XX......"],
-  // Fleshball — round, just a face on meat
-  fleshball: ["..............", "....XXXXXX....", "..XXFFFFFFXX..", ".XFFFFFFFFFFX.", ".XFFEEFFEEFFX.", ".XFFFFFFFFFFX.", ".XFFFMMMMFFFX.", ".XFFMTTTMMFFX.", ".XXFFFFFFFFXX.", "XXXXXXXXXXXXXX", "XXXXXXXXXXXXXX", ".XXXXXXXXXXXX.", "..XXXXXXXXXX..", "...XX....XX..."]
+  // Screamer — gaunt, enormous gaping mouth
+  screamer: ["......XXX.....", ".....XFFFX....", ".....XEEFX....", ".....XFFFX....", ".....XMMMX....", "....XMMMMMX...", "....XMMMMMX...", ".....XMMMX....", "......XXX.....", ".....XXXXX....", "....XX.XX.X...", "....X...X.....", "...XX...XX....", "..XX.....XX..."]
 };
 function CreatureSilhouette({
-  kind = "troll",
+  kind = "walker",
   size = 140,
   shake = false,
   bleeding = false,
@@ -72,8 +66,8 @@ function CreatureSilhouette({
   className = "",
   style = {}
 }) {
-  const pattern = CREATURE_PATTERNS[kind] || CREATURE_PATTERNS.troll;
-  const palette = CREATURE_PALETTES[kind] || CREATURE_PALETTES.troll;
+  const pattern = CREATURE_PATTERNS[kind] || CREATURE_PATTERNS.walker;
+  const palette = CREATURE_PALETTES[kind] || CREATURE_PALETTES.walker;
   const rows = pattern.length;
   const cols = pattern[0].length;
   const cell = size / cols;

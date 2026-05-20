@@ -93,13 +93,16 @@ cvs.addEventListener('mousedown', e => {
   if (!locked || player.dead) return;
   if (e.button === 0) {
     // Melee a nearby zombie first; otherwise mine the targeted block.
-    if (!meleeAttack()) {
+    if (meleeAttack()) {
+      pushInventory();   // weapon durability / zombie loot may have changed
+    } else {
       const r = raycast(camera);
       if (r) {
         const bid = getBlockAt(...r.hit);
         setBlockAt(...r.hit, 0);
         const drop = dropForBlock(bid);
         if (drop) playerState.inventory.add(drop, 1);
+        playerState.stats.blocksMined++;
         addXp(1);
         pushInventory();
       }
@@ -114,6 +117,7 @@ cvs.addEventListener('mousedown', e => {
     if (r && r.prev) {
       setBlockAt(...r.prev, item.blockId);
       playerState.inventory.removeAt(playerState.selIdx, 1);
+      playerState.stats.blocksPlaced++;
       pushInventory();
     }
   }
@@ -265,6 +269,8 @@ function updateHUD() {
     levelXp:     xpForLevel(playerState.level),
     nextLevelXp: xpForLevel(playerState.level + 1),
     perks:       playerState.perks,
+    stats:       playerState.stats,
+    deathCause:  player.lastAttacker,
   });
 }
 
