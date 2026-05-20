@@ -12,6 +12,7 @@ import { initCommands } from './commands.js';
 import { getItem, itemMeta, dropForBlock } from './items.js';
 import { RECIPES } from './crafting.js';
 import { maybeSpawnCrate, findCrateNear } from './crates.js';
+import { initAudio, unlockAudio, startAmbient, updateAmbient } from './audio.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
 
@@ -91,7 +92,12 @@ window.GameBridge.on('respawn', () => { resetGame(); });
 
 const cvs = document.getElementById('c');
 cvs.addEventListener('click', () => {
-  if (!player.dead && window.GameBridge.state.started) cvs.requestPointerLock();
+  if (!player.dead && window.GameBridge.state.started) {
+    cvs.requestPointerLock();
+    // Autoplay policy: AudioContext only unlocks on a user gesture.
+    unlockAudio();
+    startAmbient();
+  }
 });
 
 cvs.addEventListener('webglcontextlost', (e) => {
@@ -251,6 +257,8 @@ function updateAtmosphere() {
 
 let _bridgeTickAcc = 0;
 const BRIDGE_TICK = 1 / 10; // push state at 10 Hz, not every frame
+let _lastLevel = 1;
+let _lastBloodMoon = false;
 
 // Mirror the authoritative inventory snapshot to React (event-driven).
 function pushInventory() {
@@ -264,6 +272,13 @@ function updateHUD() {
   _bridgeTickAcc += FIXED_DT;
   if (_bridgeTickAcc < BRIDGE_TICK) return;
   _bridgeTickAcc = 0;
+
+  // Event-style emits driven by state deltas.
+  if (playerState.level > _lastLevel) { window.GameBridge.emit('levelUp'); _lastLevel = playerState.level; }
+  if (cycle.isBloodMoon && !_lastBloodMoon) window.GameBridge.emit('bloodMoonStart');
+  _lastBloodMoon = cycle.isBloodMoon;
+
+  updateAmbient(cycle.isNight, cycle.isBloodMoon);
 
   window.GameBridge.setState({
     hp:          Math.max(0, player.hp),
@@ -342,6 +357,7 @@ function updateMining(dt) {
       slot.durability -= 1;
       if (slot.durability <= 0) playerState.inventory.slots[playerState.selIdx] = null;
     }
+    window.GameBridge.emit('mine');
     pushInventory();
     mining = null;
   }
@@ -450,8 +466,9 @@ updateChunks();
 while (chunkQueue.length > 0) processChunkQueue();
 player.pos.set(0, groundY(0, 0) + 3, 0);
 
-// ── Inventory / crafting wiring ────────────────────────────────────────────
+// ── Inventory / crafting / audio wiring ────────────────────────────────────
 initCommands(pushInventory);
+initAudio();
 window.GameBridge.setState({ itemMeta: itemMeta(), recipeMeta: RECIPES });
 playerState.inventory.add('wood_pickaxe', 1);
 playerState.inventory.add('wood_club', 1);

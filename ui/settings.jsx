@@ -113,10 +113,18 @@ function Settings({ onResume, onMenu }) {
 
           {tab === "AUDIO" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <SliderRow label="MASTER VOLUME" value={master} min={0} max={100} unit="%" onChange={setMaster} />
-              <SliderRow label="AMBIENT HORROR" value={ambience} min={0} max={100} unit="%" onChange={setAmbience} />
-              <SliderRow label="SFX" value={sfx} min={0} max={100} unit="%" onChange={setSfx} />
-              <SliderRow label="MUSIC" value={music} min={0} max={100} unit="%" onChange={setMusic} />
+              <SliderRow label="MASTER VOLUME" value={master}
+                min={0} max={100} unit="%"
+                onChange={(v) => { setMaster(v); window.GameBridge.emit("audio:master", v); }} />
+              <SliderRow label="AMBIENT HORROR" value={ambience}
+                min={0} max={100} unit="%"
+                onChange={(v) => { setAmbience(v); window.GameBridge.emit("audio:ambient", v); }} />
+              <SliderRow label="SFX" value={sfx}
+                min={0} max={100} unit="%"
+                onChange={(v) => { setSfx(v); window.GameBridge.emit("audio:sfx", v); }} />
+              <SliderRow label="MUSIC" value={music}
+                min={0} max={100} unit="%"
+                onChange={(v) => { setMusic(v); window.GameBridge.emit("audio:music", v); }} />
               <RadioRow label="CREATURE VOICES" value="ON" options={["OFF", "MUTED", "ON"]} onChange={() => {}} />
               <div className="mono dim" style={{ fontSize: 10, letterSpacing: "0.18em", marginTop: 8, padding: "8px 12px", borderLeft: "2px solid var(--blood)", background: "rgba(204,34,0,0.05)" }}>
                 ⚠ AMBIENT HORROR ABOVE 80% MAY INCREASE PARANOIA EVENTS

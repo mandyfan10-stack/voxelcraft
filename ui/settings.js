@@ -207,28 +207,40 @@ function Settings({
     min: 0,
     max: 100,
     unit: "%",
-    onChange: setMaster
+    onChange: v => {
+      setMaster(v);
+      window.GameBridge.emit("audio:master", v);
+    }
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "AMBIENT HORROR",
     value: ambience,
     min: 0,
     max: 100,
     unit: "%",
-    onChange: setAmbience
+    onChange: v => {
+      setAmbience(v);
+      window.GameBridge.emit("audio:ambient", v);
+    }
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "SFX",
     value: sfx,
     min: 0,
     max: 100,
     unit: "%",
-    onChange: setSfx
+    onChange: v => {
+      setSfx(v);
+      window.GameBridge.emit("audio:sfx", v);
+    }
   }), /*#__PURE__*/React.createElement(SliderRow, {
     label: "MUSIC",
     value: music,
     min: 0,
     max: 100,
     unit: "%",
-    onChange: setMusic
+    onChange: v => {
+      setMusic(v);
+      window.GameBridge.emit("audio:music", v);
+    }
   }), /*#__PURE__*/React.createElement(RadioRow, {
     label: "CREATURE VOICES",
     value: "ON",
