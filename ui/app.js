@@ -26,7 +26,13 @@ function App() {
   // Game events from the Three.js bridge
   React.useEffect(() => {
     const onDeath = () => setScreen("death");
-    const onState = s => setHordeActive(!!s.hordeActive);
+    const onState = s => {
+      setHordeActive(!!s.hordeActive);
+      // Opening a loot crate is event-like — react when lootOpen flips on.
+      if (s.lootOpen) {
+        setScreen(prev => prev === "loot" ? prev : "loot");
+      }
+    };
     window.GameBridge.on("death", onDeath);
     window.GameBridge.on("state", onState);
     return () => {
@@ -63,7 +69,15 @@ function App() {
         setScreen(s => s === "inventory" ? "hud" : s === "hud" ? "inventory" : s);
       } else if (k === "escape") {
         e.preventDefault();
-        setScreen(s => s === "settings" || s === "inventory" ? "hud" : s === "hud" ? "settings" : s);
+        setScreen(s => {
+          if (s === "loot") {
+            window.GameBridge.emit("loot:close");
+            return "hud";
+          }
+          if (s === "settings" || s === "inventory") return "hud";
+          if (s === "hud") return "settings";
+          return s;
+        });
       }
     };
     window.addEventListener("keydown", handler);
@@ -79,6 +93,8 @@ function App() {
   }), screen === "menu" && /*#__PURE__*/React.createElement(MainMenu, {
     onStart: handleStart
   }), screen === "inventory" && /*#__PURE__*/React.createElement(Inventory, {
+    onClose: () => setScreen("hud")
+  }), screen === "loot" && /*#__PURE__*/React.createElement(Loot, {
     onClose: () => setScreen("hud")
   }), screen === "settings" && /*#__PURE__*/React.createElement(Settings, {
     onResume: () => setScreen("hud"),

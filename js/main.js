@@ -11,6 +11,7 @@ import { playerState, addXp, xpForLevel } from './playerstate.js';
 import { initCommands } from './commands.js';
 import { getItem, itemMeta, dropForBlock } from './items.js';
 import { RECIPES } from './crafting.js';
+import { maybeSpawnCrate, findCrateNear } from './crates.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
 
@@ -49,10 +50,17 @@ addEventListener('keydown', e => {
   else if (c === 'ShiftLeft' || c === 'ShiftRight') keys.shift = 1;
   else if (c === 'KeyE') {
     if (locked && !player.dead) {
-      const r = raycast(camera);
-      if (r && getBlockAt(...r.hit) === 7) {
-        playerState.thirst = Math.min(THIRST_MAX, playerState.thirst + 22);
-        window.GameBridge?.emit('drink');
+      // Loot crate within reach takes priority over drinking.
+      const crate = findCrateNear(player.pos.x, player.pos.y + 1, player.pos.z, 2.6);
+      if (crate) {
+        window.GameBridge.setState({ lootOpen: { id: crate.id, type: crate.type, contents: crate.contents.slice() } });
+        if (document.pointerLockElement) document.exitPointerLock();
+      } else {
+        const r = raycast(camera);
+        if (r && getBlockAt(...r.hit) === 7) {
+          playerState.thirst = Math.min(THIRST_MAX, playerState.thirst + 22);
+          window.GameBridge?.emit('drink');
+        }
       }
     }
   }
@@ -212,6 +220,7 @@ function processChunkQueue() {
     const { cx, cz } = chunkQueue.shift();
     genChunk(cx, cz);
     if (!chunkMeshes.has(getChunkKey(cx, cz))) makeChunkMesh(cx, cz, scene);
+    maybeSpawnCrate(scene, cx, cz);
   }
 }
 

@@ -4,6 +4,7 @@ import { playerState, addXp } from './playerstate.js';
 import { getItem } from './items.js';
 import { RECIPES, doCraft } from './crafting.js';
 import { player } from './entities.js';
+import { getCrateById } from './crates.js';
 import { THIRST_MAX } from './config.js';
 
 // `pushInventory` mirrors the authoritative inventory snapshot back to React.
@@ -36,5 +37,36 @@ export function initCommands(pushInventory) {
     if (r.hp)     player.hp = Math.max(0, Math.min(playerState.maxHp, player.hp + r.hp));
     inv().removeAt(idx, 1);
     pushInventory();
+  });
+
+  // Loot transfer — move one stack from a crate into the player inventory.
+  B.on('loot:take', ({ crateId, idx }) => {
+    const crate = getCrateById(crateId);
+    if (!crate) return;
+    const item = crate.contents[idx];
+    if (!item) return;
+    const leftover = inv().add(item.id, item.count);
+    if (leftover === 0)         crate.contents.splice(idx, 1);
+    else if (leftover < item.count) crate.contents[idx] = { id: item.id, count: leftover };
+    window.GameBridge.setState({ lootOpen: { id: crate.id, type: crate.type, contents: crate.contents.slice() } });
+    pushInventory();
+  });
+
+  // Take everything possible from the open crate.
+  B.on('loot:takeAll', ({ crateId }) => {
+    const crate = getCrateById(crateId);
+    if (!crate) return;
+    for (let i = crate.contents.length - 1; i >= 0; i--) {
+      const item = crate.contents[i];
+      const leftover = inv().add(item.id, item.count);
+      if (leftover === 0)            crate.contents.splice(i, 1);
+      else if (leftover < item.count) crate.contents[i] = { id: item.id, count: leftover };
+    }
+    window.GameBridge.setState({ lootOpen: { id: crate.id, type: crate.type, contents: crate.contents.slice() } });
+    pushInventory();
+  });
+
+  B.on('loot:close', () => {
+    window.GameBridge.setState({ lootOpen: null });
   });
 }
