@@ -16,8 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npm run lint
       - run: npm test
       - run: npm run build:ui
@@ -51,8 +50,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - run: npm run gen-icons
       - run: npm run build:ui
       - uses: actions/configure-pages@v5
