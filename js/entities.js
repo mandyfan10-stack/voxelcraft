@@ -191,14 +191,20 @@ export function meleeAttack() {
 
 export function getMobBlips() {
   const RADAR_RANGE = 64;
+  // Player-frame basis: forward is where the camera points, right is 90° CW of it.
+  const fwx = -Math.sin(player.yaw), fwz = -Math.cos(player.yaw);
+  const rtx =  Math.cos(player.yaw), rtz = -Math.sin(player.yaw);
   return mobs.filter(m => !m.userData.dead).map(m => {
     const dx = m.position.x - player.pos.x;
     const dz = m.position.z - player.pos.z;
     const dist = Math.hypot(dx, dz);
-    const worldAngleDeg = Math.atan2(dx, dz) * (180 / Math.PI);
-    const relAngle = ((worldAngleDeg - player.yaw * (180 / Math.PI)) + 720) % 360;
+    const forward = dx * fwx + dz * fwz;   // + = ahead of the player
+    const right   = dx * rtx + dz * rtz;   // + = to the player's right
+    // Minimap maps angle 0 → straight up (forward), 90° → right. atan2(right,
+    // forward) gives exactly that; the old atan2(dx,dz)-yaw form flipped front/back.
+    const angle = (Math.atan2(right, forward) * (180 / Math.PI) + 360) % 360;
     return {
-      angle: relAngle,
+      angle,
       dist: Math.min(1, dist / RADAR_RANGE),
       kind: m.userData.blip || 'W',
     };
