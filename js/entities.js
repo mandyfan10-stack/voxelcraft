@@ -195,14 +195,29 @@ export function getMobBlips() {
     const dx = m.position.x - player.pos.x;
     const dz = m.position.z - player.pos.z;
     const dist = Math.hypot(dx, dz);
-    const worldAngleDeg = Math.atan2(dx, dz) * (180 / Math.PI);
-    const relAngle = ((worldAngleDeg - player.yaw * (180 / Math.PI)) + 720) % 360;
+    // Project the offset onto the player's forward/right axes so the blip angle
+    // is player-relative with 0° = dead ahead and 90° = right — matching the HUD
+    // radar's "0 = forward = top" convention. Forward is (-sin, -cos), right is
+    // (cos, -sin) (see main.js movement basis); a raw atan2(dx, dz) would put
+    // mobs in front of you at the bottom of the radar (front/back inverted).
+    const cy = Math.cos(player.yaw), sy = Math.sin(player.yaw);
+    const fwd   = -(dx * sy + dz * cy);
+    const right =   dx * cy - dz * sy;
+    const relAngle = (Math.atan2(right, fwd) * (180 / Math.PI) + 360) % 360;
     return {
       angle: relAngle,
       dist: Math.min(1, dist / RADAR_RANGE),
       kind: m.userData.blip || 'W',
     };
   });
+}
+
+// Free the GPU geometry of a removed object tree. Mob/crate meshes allocate a
+// fresh BufferGeometry per part on spawn, so scene.remove() alone leaks them.
+// Materials/textures are shared module-level singletons (see zombies.js /
+// crates.js) reused across instances, so they are intentionally NOT disposed.
+export function disposeObject3D(obj) {
+  obj.traverse(o => { if (o.geometry) o.geometry.dispose(); });
 }
 
 // ── Death & reset ─────────────────────────────────────────────────────────────
@@ -229,6 +244,7 @@ export function resetGame() {
     while (mobs.length > 2) {
       const m = mobs.pop();
       _scene.remove(m);
+      disposeObject3D(m);
     }
   }
   try {
@@ -261,6 +277,7 @@ export function updateMobs(dt) {
   for (let i = mobs.length - 1; i >= 0; i--) {
     if (mobs[i].userData.dead) {
       if (_scene) _scene.remove(mobs[i]);
+      disposeObject3D(mobs[i]);
       mobs.splice(i, 1);
     }
   }

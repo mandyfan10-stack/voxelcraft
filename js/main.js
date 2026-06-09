@@ -15,7 +15,7 @@ import { maybeSpawnCrate, findCrateNear, clearCrates, loadCrate, setNextCrateId,
 import { initAudio, unlockAudio, startAmbient, updateAmbient } from './audio.js';
 import { saveGame, hasSave, readSave } from './save.js';
 import { editedBlocks } from './world.js';
-import { mobs } from './entities.js';
+import { mobs, disposeObject3D } from './entities.js';
 import { IS_TOUCH } from './touch.js';
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
@@ -387,7 +387,7 @@ function clearWorld() {
   dirtyChunks.clear();
   editedBlocks.clear();
   chunkQueue.length = 0;
-  while (mobs.length > 0) { scene.remove(mobs.pop()); }
+  while (mobs.length > 0) { const m = mobs.pop(); scene.remove(m); disposeObject3D(m); }
   clearCrates(scene);
 }
 

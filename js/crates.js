@@ -2,7 +2,7 @@
 
 import * as THREE from './vendor/three.module.js';
 import { rollLoot } from './loot.js';
-import { groundY } from './entities.js';
+import { groundY, disposeObject3D } from './entities.js';
 import { CHUNK_SIZE, CHUNK_HEIGHT } from './config.js';
 
 export const crates = [];
@@ -99,7 +99,7 @@ export function setCratedChunks(list) {
   if (Array.isArray(list)) for (const k of list) cratedChunks.add(k);
 }
 export function clearCrates(scene) {
-  for (const c of crates) scene.remove(c.mesh);
+  for (const c of crates) { scene.remove(c.mesh); disposeObject3D(c.mesh); }
   crates.length = 0;
   nextCrateId = 1;
 }

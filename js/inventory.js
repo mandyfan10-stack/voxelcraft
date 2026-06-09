@@ -50,7 +50,7 @@ export class Inventory {
   // Remove up to `count` from slot `idx`. Returns the amount actually removed.
   removeAt(idx, count = 1) {
     const s = this.slots[idx];
-    if (!s) return 0;
+    if (!s || count <= 0) return 0;
     const removed = Math.min(s.count, count);
     s.count -= removed;
     if (s.count <= 0) this.slots[idx] = null;
